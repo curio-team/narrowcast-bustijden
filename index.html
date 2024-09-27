@@ -365,18 +365,6 @@
       backgroundCanvas.drawImage(stopSignRoute, pointsOfInterest.stopSignRoute.x, pointsOfInterest.stopSignRoute.y, stopSignSize.width, stopSignSize.height);
     }
 
-    // Only start drawing when both images are loaded
-    let readyToDraw = false;
-    busToCentral.onload = () => {
-      busToRoute.onload = () => {
-        background.onload = () => {
-          stopSignRoute.onload = () => {
-            readyToDraw = true;
-          }
-        }
-      }
-    }
-
     let debugHelpFindBusPositions = false;
     let mouseX = 0;
     let mouseY = 0;
@@ -453,11 +441,6 @@
         console.log(x, y);
 
         drawBus(busToCentral, mouseX, mouseY, false);
-      }
-
-      if (!readyToDraw) {
-        requestAnimationFrame(draw);
-        return;
       }
 
       const now = new Date().getTime();
