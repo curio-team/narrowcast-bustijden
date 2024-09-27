@@ -6,8 +6,10 @@
   <meta name="viewport"
         content="width=device-width, initial-scale=1.0">
   <title>Bus tijden</title>
+
   <meta http-equiv="Content-Security-Policy"
         content="upgrade-insecure-requests">
+
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -23,9 +25,7 @@
       }
     }
   </script>
-</head>
 
-<body>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville&family=Montserrat&family=Open+Sans&display=swap');
 
@@ -39,12 +39,17 @@
 
     }
   </style>
+</head>
+
+<body>
   <div id="app">
     {{getData}}
+
     <div class="toCentral text-curioText">
       <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
         Centraal <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
       </h2>
+
       <table class="table-auto w-full">
         <thead class="text-l bg-curioGreen text-curioPurple uppercase">
           <tr class="text-center">
@@ -54,6 +59,7 @@
             <th class="p-1">Lijn</th>
           </tr>
         </thead>
+
         <tbody class="text-2xl">
           <tr v-for="bus in toCentral.slice(0,5)"
               class="text-center border-b">
@@ -73,10 +79,12 @@
         </tbody>
       </table>
     </div>
+
     <div class="toRoute text-curioText">
       <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
         Route <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
       </h2>
+
       <table class="table-auto w-full">
         <thead class="text-1 bg-curioGreen text-curioPurple uppercase">
           <tr class="text-center">
@@ -86,6 +94,7 @@
             <th class="p-1">Lijn</th>
           </tr>
         </thead>
+
         <tbody class="text-2xl">
           <tr v-for="bus in toRoute.slice(0,5)"
               class="text-center border-b">
@@ -105,9 +114,21 @@
         </tbody>
       </table>
     </div>
+
     <br />
   </div>
+
   <script>
+    const TO_CENTRAL_ID = 72000640;
+    const TO_ROUTE_ID = 72000810;
+
+    function sortPasses(passes) {
+      return Object.values(passes)
+        .sort(
+          (a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime)
+        );
+    }
+
     Vue.createApp({
       data() {
         return {
@@ -117,19 +138,38 @@
       },
       computed: {
         getData() {
-          const url = 'https://bustijden.curio.codes';
-          let options = {
+          let url = 'https://bustijden.curio.codes';
+          const options = {
             method: 'GET'
           }
-          let response = fetch(url, options).then((response) => response.json()).then((data) => {
-            this.toCentral = Object.values(data.BdOud[72000640].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
-            this.toRoute = Object.values(data.BdOud[72000810].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
-          });
+
+          if (window.location.hostname === 'localhost'
+            || window.location.hostname === '127.0.0.1') {
+            // Note that you will have to open this URL in the browser and accept the risk
+            // before it will load the data.
+            url = 'http://v0.ovapi.nl/stopareacode/BdOud';
+
+            // If you want live data, comment the line below. We use this static data during
+            // development to prevent hitting any API rate limit.
+            url = 'test-data.json';
+          }
+
+          fetch(url, options)
+            .then((response) => response.json())
+            .then((data) => {
+              this.toCentral = sortPasses(data.BdOud[TO_CENTRAL_ID].Passes);
+              this.toRoute = sortPasses(data.BdOud[TO_ROUTE_ID].Passes);
+            });
         }
       },
       methods: {
         formatDate(value) {
-          return new Date(value).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+          return new Date(value)
+            .toLocaleTimeString('nl-NL', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: '2-digit'
+            });
         },
         translate(status) {
           let translatedStatus;
@@ -148,7 +188,7 @@
               translatedStatus = 'Rijden';
               break;
             default:
-              translatedStatus = 'Onbekend'; // Default translation for unknown status
+              translatedStatus = 'Onbekend';
           }
 
           return translatedStatus;
