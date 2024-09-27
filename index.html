@@ -2,152 +2,160 @@
 <html lang="en">
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bus tijden</title>
-    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests"> 
-    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        curioPurple: '#69197c',
-                        curioGreen: '#56ddef',
-                        curioText: '#333333'
-                    }
-                }
-            }
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1.0">
+  <title>Bus tijden</title>
+  <meta http-equiv="Content-Security-Policy"
+        content="upgrade-insecure-requests">
+  <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            curioPurple: '#69197c',
+            curioGreen: '#56ddef',
+            curioText: '#333333'
+          }
         }
-    </script>
+      }
+    }
+  </script>
 </head>
 
 <body>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville&family=Montserrat&family=Open+Sans&display=swap');
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville&family=Montserrat&family=Open+Sans&display=swap');
 
-        body,
-        html {
-            background-color: white;
-        }
+    body,
+    html {
+      background-color: white;
+    }
 
-        h2 {
-            font-family: 'Montserrat', sans-serif;
+    h2 {
+      font-family: 'Montserrat', sans-serif;
 
-        }
-    </style>
-    <div id="app">
-        {{getData}}
-        <div class="toCentral text-curioText">
-            <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
-                Centraal <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
-            </h2>
-            <table class="table-auto w-full">
-                <thead class="text-l bg-curioGreen text-curioPurple uppercase">
-                    <tr class="text-center">
-                        <th class="p-1">Vertrektijd</th>
-                        <th class="p-1">Status</th>
-                        <th class="p-1">Naar</th>
-                        <th class="p-1">Lijn</th>
-                    </tr>
-                </thead>
-                <tbody class="text-2xl">
-                    <tr v-for="bus in toCentral.slice(0,5)" class="text-center border-b">
-                        <td class="p-1" v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-                            {{ formatDate(bus.TargetArrivalTime) }}
-                        </td>
-                        <td v-else class="p-2">
-                            <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-                            <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
-                        </td>
-                        <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
-                        <td class="p-2">{{bus.DestinationName50}}</td>
-                        <td class="p-2">{{bus.LinePublicNumber}}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <div class="toRoute text-curioText">
-            <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
-                Route <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
-            </h2>
-            <table class="table-auto w-full">
-                <thead class="text-1 bg-curioGreen text-curioPurple uppercase">
-                    <tr class="text-center">
-                        <th class="p-1">Vertrektijd</th>
-                        <th class="p-1">Status</th>
-                        <th class="p-1">Naar</th>
-                        <th class="p-1">Lijn</th>
-                    </tr>
-                </thead>
-                <tbody class="text-2xl">
-                    <tr v-for="bus in toRoute.slice(0,5)" class="text-center border-b">
-                        <td class="p-2" v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-                            {{ formatDate(bus.TargetArrivalTime) }}
-                        </td>
-                        <td v-else class="p-2">
-                            <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-                            <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
-                        </td>
-                        <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
-                        <td class="p-2">{{bus.DestinationName50}}</td>
-                        <td class="p-2">{{bus.LinePublicNumber}}</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-        <br />
+    }
+  </style>
+  <div id="app">
+    {{getData}}
+    <div class="toCentral text-curioText">
+      <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
+        Centraal <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
+      </h2>
+      <table class="table-auto w-full">
+        <thead class="text-l bg-curioGreen text-curioPurple uppercase">
+          <tr class="text-center">
+            <th class="p-1">Vertrektijd</th>
+            <th class="p-1">Status</th>
+            <th class="p-1">Naar</th>
+            <th class="p-1">Lijn</th>
+          </tr>
+        </thead>
+        <tbody class="text-2xl">
+          <tr v-for="bus in toCentral.slice(0,5)"
+              class="text-center border-b">
+            <td class="p-1"
+                v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
+              {{ formatDate(bus.TargetArrivalTime) }}
+            </td>
+            <td v-else
+                class="p-2">
+              <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
+              <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+            </td>
+            <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+            <td class="p-2">{{bus.DestinationName50}}</td>
+            <td class="p-2">{{bus.LinePublicNumber}}</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
-    <script>
-        Vue.createApp({
-            data() {
-                return {
-                    toCentral: [],
-                    toRoute: []
-                }
-            },
-            computed: {
-                getData() {
-                    const url = 'https://bustijden.curio.codes';
-                    let options = {
-                        method: 'GET'
-                    }
-                    let response = fetch(url, options).then((response) => response.json()).then((data) => {
-                        this.toCentral = Object.values(data.BdOud[72000640].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
-                        this.toRoute = Object.values(data.BdOud[72000810].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
-                    });
-                }
-            },
-            methods: {
-                formatDate(value) {
-                    return new Date(value).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                },
-                translate(status) {
-                    let translatedStatus;
+    <div class="toRoute text-curioText">
+      <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
+        Route <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
+      </h2>
+      <table class="table-auto w-full">
+        <thead class="text-1 bg-curioGreen text-curioPurple uppercase">
+          <tr class="text-center">
+            <th class="p-1">Vertrektijd</th>
+            <th class="p-1">Status</th>
+            <th class="p-1">Naar</th>
+            <th class="p-1">Lijn</th>
+          </tr>
+        </thead>
+        <tbody class="text-2xl">
+          <tr v-for="bus in toRoute.slice(0,5)"
+              class="text-center border-b">
+            <td class="p-2"
+                v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
+              {{ formatDate(bus.TargetArrivalTime) }}
+            </td>
+            <td v-else
+                class="p-2">
+              <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
+              <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+            </td>
+            <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+            <td class="p-2">{{bus.DestinationName50}}</td>
+            <td class="p-2">{{bus.LinePublicNumber}}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <br />
+  </div>
+  <script>
+    Vue.createApp({
+      data() {
+        return {
+          toCentral: [],
+          toRoute: []
+        }
+      },
+      computed: {
+        getData() {
+          const url = 'https://bustijden.curio.codes';
+          let options = {
+            method: 'GET'
+          }
+          let response = fetch(url, options).then((response) => response.json()).then((data) => {
+            this.toCentral = Object.values(data.BdOud[72000640].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
+            this.toRoute = Object.values(data.BdOud[72000810].Passes).sort((a, b) => a.TargetArrivalTime.localeCompare(b.TargetArrivalTime));
+          });
+        }
+      },
+      methods: {
+        formatDate(value) {
+          return new Date(value).toLocaleTimeString('nl-NL', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        },
+        translate(status) {
+          let translatedStatus;
 
-                    switch (status) {
-                        case 'PLANNED':
-                            translatedStatus = 'Gepland';
-                            break;
-                        case 'PASSED':
-                            translatedStatus = 'Gepasseerd';
-                            break;
-                        case 'CANCEL':
-                            translatedStatus = 'Geannuleerd';
-                            break;
-                        case 'DRIVING':
-                            translatedStatus = 'Rijden';
-                            break;
-                        default:
-                            translatedStatus = 'Onbekend'; // Default translation for unknown status
-                    }
+          switch (status) {
+            case 'PLANNED':
+              translatedStatus = 'Gepland';
+              break;
+            case 'PASSED':
+              translatedStatus = 'Gepasseerd';
+              break;
+            case 'CANCEL':
+              translatedStatus = 'Geannuleerd';
+              break;
+            case 'DRIVING':
+              translatedStatus = 'Rijden';
+              break;
+            default:
+              translatedStatus = 'Onbekend'; // Default translation for unknown status
+          }
 
-                    return translatedStatus;
-                },
-            }
-        }).mount('#app');
-    </script>
+          return translatedStatus;
+        },
+      }
+    }).mount('#app');
+  </script>
 </body>
 
 </html>
