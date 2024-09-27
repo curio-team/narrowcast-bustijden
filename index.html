@@ -17,9 +17,8 @@
       theme: {
         extend: {
           colors: {
-            curioPurple: '#69197c',
-            curioGreen: '#56ddef',
-            curioText: '#333333'
+            curioPrimary: '#69197c',
+            curioSecondary: '#56ddef',
           }
         }
       }
@@ -32,90 +31,102 @@
     body,
     html {
       background-color: white;
+      height: 100%;
+      width: 100%;
     }
 
     h2 {
-      font-family: 'Montserrat', sans-serif;
-
+      font-family: 'Arial', sans-serif;
+      font-weight: bolder;
     }
   </style>
 </head>
 
-<body>
-  <div id="app">
-    {{getData}}
+<body class="bg-gradient-to-br from-curioPrimary/50 to-curioSecondary/50 flex items-center justify-center">
+  <canvas id="backgroundCanvas"
+          class="fixed w-full h-full"></canvas>
 
-    <div class="toCentral text-curioText">
-      <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
-        Centraal <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
-      </h2>
+  <div id="app"
+       class="absolute h-full w-full flex flex-col justify-between p-12 pb-20">
+    {{ getData }}
 
-      <table class="table-auto w-full">
-        <thead class="text-l bg-curioGreen text-curioPurple uppercase">
-          <tr class="text-center">
-            <th class="p-1">Vertrektijd</th>
-            <th class="p-1">Status</th>
-            <th class="p-1">Naar</th>
-            <th class="p-1">Lijn</th>
-          </tr>
-        </thead>
+    <div>
+      <div class="toCentral bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 shadow-lg">
+        <h2 class="text-3xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+          Centraal
+        </h2>
 
-        <tbody class="text-2xl">
-          <tr v-for="bus in toCentral.slice(0,5)"
-              class="text-center border-b">
-            <td class="p-1"
-                v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-              {{ formatDate(bus.TargetArrivalTime) }}
-            </td>
-            <td v-else
-                class="p-2">
-              <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-              <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
-            </td>
-            <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
-            <td class="p-2">{{bus.DestinationName50}}</td>
-            <td class="p-2">{{bus.LinePublicNumber}}</td>
-          </tr>
-        </tbody>
-      </table>
+        <table class="table-auto w-full">
+          <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
+            <tr class="text-center">
+              <th class="p-1">Vertrektijd</th>
+              <th class="p-1">Status</th>
+              <th class="p-1">Naar</th>
+              <th class="p-1">Lijn</th>
+            </tr>
+          </thead>
+
+          <tbody class="text-2xl">
+            <tr v-for="bus in toCentral.slice(0,5)"
+                class="text-center border-b">
+              <td class="p-1"
+                  v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
+                {{ formatDate(bus.TargetArrivalTime) }}
+              </td>
+              <td v-else
+                  class="p-2">
+                <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
+                <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+              </td>
+              <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+              <td class="p-2">{{bus.DestinationName50}}</td>
+              <td class="p-2">{{bus.LinePublicNumber}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div class="toRoute text-curioText">
-      <h2 class="text-3xl bg-curioGreen text-curioPurple font-bold uppercase p-3">
-        Route <span class="text-base font-normal">( <b>Let op:</b> tijden zonder looptijd )</span>
-      </h2>
+    <div class="flex justify-end">
+      <div class="toRoute bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 shadow-lg">
+        <h2 class="text-3xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+          Route
+        </h2>
 
-      <table class="table-auto w-full">
-        <thead class="text-1 bg-curioGreen text-curioPurple uppercase">
-          <tr class="text-center">
-            <th class="p-1">Vertrektijd</th>
-            <th class="p-1">Status</th>
-            <th class="p-1">Naar</th>
-            <th class="p-1">Lijn</th>
-          </tr>
-        </thead>
+        <table class="table-auto w-full">
+          <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
+            <tr class="text-center">
+              <th class="p-1">Vertrektijd</th>
+              <th class="p-1">Status</th>
+              <th class="p-1">Naar</th>
+              <th class="p-1">Lijn</th>
+            </tr>
+          </thead>
 
-        <tbody class="text-2xl">
-          <tr v-for="bus in toRoute.slice(0,5)"
-              class="text-center border-b">
-            <td class="p-2"
-                v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-              {{ formatDate(bus.TargetArrivalTime) }}
-            </td>
-            <td v-else
-                class="p-2">
-              <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-              <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
-            </td>
-            <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
-            <td class="p-2">{{bus.DestinationName50}}</td>
-            <td class="p-2">{{bus.LinePublicNumber}}</td>
-          </tr>
-        </tbody>
-      </table>
+          <tbody class="text-2xl">
+            <tr v-for="bus in toRoute.slice(0,5)"
+                class="text-center border-b">
+              <td class="p-2"
+                  v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
+                {{ formatDate(bus.TargetArrivalTime) }}
+              </td>
+              <td v-else
+                  class="p-2">
+                <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
+                <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+              </td>
+              <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+              <td class="p-2">{{bus.DestinationName50}}</td>
+              <td class="p-2">{{bus.LinePublicNumber}}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
 
-    <br />
+  <div class="fixed bottom-0 w-full text-curioPrimary text-center p-4">
+    <p class="text-xl font-bold">Let op: Alle vertrektijden zijn vanaf de halte.</p>
   </div>
 
   <script>
@@ -129,6 +140,48 @@
         );
     }
 
+    function isLocalhost() {
+      return window.location.hostname === 'localhost'
+        || window.location.hostname === '127.0.0.1';
+    }
+
+    let currentBusAnimationId = 0;
+    const busAnimationData = [];
+
+    // Animation constants
+    const BUS_TRAVEL_DURATION = 3000;
+    const FADE_TIME = BUS_TRAVEL_DURATION * .5;
+    const FADE_IN = 1;
+    const FADE_OUT = 2;
+
+    function fadeMode(mode, duration) {
+      return {
+        mode,
+        duration: duration || FADE_TIME
+      };
+    }
+
+    function addBusToAnimationData(direction, from, to, fadeMode, onArrivalCallback) {
+      const currentTime = new Date().getTime();
+      busAnimationData[currentBusAnimationId] = {
+        direction,
+        from,
+        to,
+        fadeMode, // This can be null if no fading is desired
+        startTime: currentTime,
+        travelDuration: BUS_TRAVEL_DURATION,
+        onArrivalCallback
+      };
+      currentBusAnimationId++;
+    }
+
+    function removeBusFromAnimationData(index) {
+      delete busAnimationData[index];
+    }
+
+    /*
+    ** API data fetching of bus times
+    */
     Vue.createApp({
       data() {
         return {
@@ -143,8 +196,7 @@
             method: 'GET'
           }
 
-          if (window.location.hostname === 'localhost'
-            || window.location.hostname === '127.0.0.1') {
+          if (isLocalhost()) {
             // Note that you will have to open this URL in the browser and accept the risk
             // before it will load the data.
             url = 'http://v0.ovapi.nl/stopareacode/BdOud';
@@ -159,6 +211,10 @@
             .then((data) => {
               this.toCentral = sortPasses(data.BdOud[TO_CENTRAL_ID].Passes);
               this.toRoute = sortPasses(data.BdOud[TO_ROUTE_ID].Passes);
+
+              // TODO: Draw the bus animations based on real arrival times
+              // To use the API data, we could determine the arrival time and if it's close enough to the current time,
+              // we could add a bus to the animation data to show it arriving and going to the destination.
             });
         }
       },
@@ -195,6 +251,254 @@
         },
       }
     }).mount('#app');
+
+    /*
+    ** Background canvas bus animation
+    */
+    const busToCentral = new Image();
+    busToCentral.src = 'assets/bus-to-central.png';
+
+    const busToRoute = new Image();
+    busToRoute.src = 'assets/bus-to-route.png';
+
+    const background = new Image();
+    background.src = 'assets/background.png';
+
+    const stopSignRoute = new Image();
+    stopSignRoute.src = 'assets/stop.png';
+
+    // Original image pixel sizes and points of interest (x and y of top-left of bus image)
+    const backgroundOriginalSize = 990;
+    const busOriginalSize = 350;
+    const stopSignOriginalSize = 194;
+    const backgroundOriginalPointsOfInterest = {
+      toCentral: {
+        spawn: { x: 1259, y: -259 },
+        stop: { x: 268, y: 314 },
+        destination: { x: -800, y: 900 },
+      },
+      toRoute: {
+        spawn: { x: -812, y: 1118 },
+        stop: { x: 488, y: 446 },
+        destination: { x: 1475, y: -100 },
+      },
+      stopSignRoute: { x: 785, y: 515 },
+    }
+
+    // Scaled bus size and points of interest
+    let busSize = busOriginalSize;
+    let stopSignSize = stopSignOriginalSize;
+    let drawArea = {};
+    let pointsOfInterest = {};
+
+    // Get the canvas and its context
+    const backgroundCanvasElement = document.getElementById('backgroundCanvas');
+    const backgroundCanvas = backgroundCanvasElement.getContext('2d');
+    const scaleAnimation = 0.4;
+
+    const resizeCanvas = () => {
+      backgroundCanvasElement.width = window.innerWidth;
+      backgroundCanvasElement.height = window.innerHeight;
+
+      const smallestDimension = Math.min(window.innerWidth * scaleAnimation, window.innerHeight * scaleAnimation);
+      drawArea = {
+        x: window.innerWidth * .5 - smallestDimension * .5,
+        y: window.innerHeight * .5 - smallestDimension * .5,
+        width: smallestDimension,
+        height: smallestDimension
+      };
+
+      // Scale the bus and points of interest to the new canvas size
+      const scalePoint = (point) => {
+        return {
+          x: drawArea.x + drawArea.width * point.x / backgroundOriginalSize,
+          y: drawArea.y + drawArea.height * point.y / backgroundOriginalSize
+        }
+      }
+
+      busSize = {
+        width: smallestDimension * busOriginalSize / backgroundOriginalSize,
+        height: smallestDimension * busOriginalSize / backgroundOriginalSize
+      };
+
+      stopSignSize = {
+        width: smallestDimension * stopSignOriginalSize / backgroundOriginalSize,
+        height: smallestDimension * stopSignOriginalSize / backgroundOriginalSize
+      }
+
+      pointsOfInterest = {
+        toCentral: {
+          spawn: scalePoint(backgroundOriginalPointsOfInterest.toCentral.spawn),
+          stop: scalePoint(backgroundOriginalPointsOfInterest.toCentral.stop),
+          destination: scalePoint(backgroundOriginalPointsOfInterest.toCentral.destination)
+        },
+        toRoute: {
+          spawn: scalePoint(backgroundOriginalPointsOfInterest.toRoute.spawn),
+          stop: scalePoint(backgroundOriginalPointsOfInterest.toRoute.stop),
+          destination: scalePoint(backgroundOriginalPointsOfInterest.toRoute.destination)
+        },
+        stopSignRoute: scalePoint(backgroundOriginalPointsOfInterest.stopSignRoute)
+      };
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
+    /*
+    ** Drawing functions
+    */
+
+    // Draws the bus at the given position, optionally "running" (bouncing up and down like its engine is running)
+    function drawBus(bus, x, y, running) {
+      if (running) {
+        y += Math.sin(Date.now() / 25) * 1;
+      }
+
+      backgroundCanvas.drawImage(bus, x, y, busSize.width, busSize.height);
+    }
+
+    function drawBackground() {
+      backgroundCanvas.drawImage(background, drawArea.x, drawArea.y, drawArea.width, drawArea.height);
+    }
+
+    function drawStopSign() {
+      backgroundCanvas.drawImage(stopSignRoute, pointsOfInterest.stopSignRoute.x, pointsOfInterest.stopSignRoute.y, stopSignSize.width, stopSignSize.height);
+    }
+
+    // Only start drawing when both images are loaded
+    let readyToDraw = false;
+    busToCentral.onload = () => {
+      busToRoute.onload = () => {
+        background.onload = () => {
+          stopSignRoute.onload = () => {
+            readyToDraw = true;
+          }
+        }
+      }
+    }
+
+    let debugHelpFindBusPositions = false;
+    let mouseX = 0;
+    let mouseY = 0;
+
+    // If we're on localhost and the user presses d, we toggle the debug mode to help find the correct bus positions
+    if (isLocalhost()) {
+      window.addEventListener('mousemove', (event) => {
+        mouseX = event.clientX;
+        mouseY = event.clientY;
+      });
+
+      window.addEventListener('keydown', (event) => {
+        if (event.key === 'd') {
+          debugHelpFindBusPositions = !debugHelpFindBusPositions;
+        }
+      });
+    }
+
+    /*
+    ** Bus animations to have it go from one point to another
+    */
+    // TODO: Actually draw busses based on the API data, for now we just show busses arriving and going
+    function showTestBusses() {
+      // A bus that goes to the stop and when it arrives, after 2 seconds, it goes to the central destination
+      addBusToAnimationData(
+        busToCentral,
+        pointsOfInterest.toCentral.spawn,
+        pointsOfInterest.toCentral.stop,
+        fadeMode(FADE_IN),
+        (bus, index) => {
+          setTimeout(() => {
+            addBusToAnimationData(
+              busToCentral,
+              pointsOfInterest.toCentral.stop,
+              pointsOfInterest.toCentral.destination,
+              fadeMode(FADE_OUT),
+            );
+            removeBusFromAnimationData(index);
+          }, 500);
+        }
+      );
+
+      // Bus the other way around
+      addBusToAnimationData(
+        busToRoute,
+        pointsOfInterest.toRoute.spawn,
+        pointsOfInterest.toRoute.stop,
+        fadeMode(FADE_IN),
+        (bus, index) => {
+          setTimeout(() => {
+            addBusToAnimationData(
+              busToRoute,
+              pointsOfInterest.toRoute.stop,
+              pointsOfInterest.toRoute.destination,
+              fadeMode(FADE_OUT),
+            );
+            removeBusFromAnimationData(index);
+          }, 500);
+        }
+      );
+    }
+    showTestBusses();
+    setInterval(showTestBusses, 10000);
+
+    function draw() {
+      backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      drawBackground();
+
+      if (debugHelpFindBusPositions) {
+        // Draw a bus at the cursor position and show the x, y coordinates based on the original image size
+        // This way we can determine the correct points of interest for the bus
+        const x = (mouseX - drawArea.x) * backgroundOriginalSize / drawArea.width;
+        const y = (mouseY - drawArea.y) * backgroundOriginalSize / drawArea.height;
+        console.log(x, y);
+
+        drawBus(busToCentral, mouseX, mouseY, false);
+      }
+
+      if (!readyToDraw) {
+        requestAnimationFrame(draw);
+        return;
+      }
+
+      const now = new Date().getTime();
+
+      busAnimationData.forEach((bus, index) => {
+        const elapsedTime = now - bus.startTime;
+
+        let alpha = 1;
+        let x, y;
+        let progress = elapsedTime / bus.travelDuration;
+
+        if (bus.fadeMode && bus.fadeMode.mode === FADE_IN) {
+          alpha = Math.min(1, elapsedTime / bus.fadeMode.duration);
+        } else if (bus.fadeMode && bus.fadeMode.mode === FADE_OUT) {
+          alpha = Math.max(0, 1 - (elapsedTime + bus.fadeMode.duration - bus.travelDuration) / bus.fadeMode.duration);
+        }
+
+        if (progress < 1) {
+          x = bus.from.x + (bus.to.x - bus.from.x) * progress;
+          y = bus.from.y + (bus.to.y - bus.from.y) * progress;
+        } else {
+          x = bus.to.x;
+          y = bus.to.y;
+        }
+
+        backgroundCanvas.globalAlpha = alpha;
+        drawBus(bus.direction, x, y, progress < 1); // Only bounce if still moving
+        backgroundCanvas.globalAlpha = 1;
+
+        if (progress > 1) {
+          bus.onArrivalCallback?.(bus, index);
+          bus.onArrivalCallback = null;
+        }
+      });
+
+      drawStopSign();
+
+      requestAnimationFrame(draw);
+    }
+
+    draw();
   </script>
 </body>
 
