@@ -59,8 +59,8 @@
         <table class="table-auto w-full">
           <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
             <tr class="text-left">
-              <th class="py-2 px-4">Vertrektijd</th>
-              <th class="py-2 px-4">Status</th>
+              <th class="py-2 px-4 min-w-48">Vertrektijd</th>
+              <!-- <th class="py-2 px-4">Status</th> -->
               <th class="py-2 px-4">Eindpunt</th>
               <th class="py-2 px-4 text-end">Lijn</th>
             </tr>
@@ -69,18 +69,18 @@
           <tbody class="text-2xl portrait:text-xl">
             <tr v-for="bus in toCentral.slice(0,5)"
                 class="border-b">
-              <td class="py-2 px-4 font-semibold w-48"
+              <td class="py-2 px-4 font-semibold min-w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="py-2 px-4 font-semibold">
+                  class="py-2 px-4 font-semibold min-w-48">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
                   <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
-              <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+              <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
               <td class="p-2">{{bus.DestinationName50}}</td>
               <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
             </tr>
@@ -98,8 +98,8 @@
         <table class="table-auto w-full">
           <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
             <tr class="text-left">
-              <th class="py-2 px-4">Vertrektijd</th>
-              <th class="py-2 px-4">Status</th>
+              <th class="py-2 px-4 min-w-48">Vertrektijd</th>
+              <!-- <th class="py-2 px-4">Status</th> -->
               <th class="py-2 px-4">Eindpunt</th>
               <th class="py-2 px-4 text-end">Lijn</th>
             </tr>
@@ -108,18 +108,18 @@
           <tbody class="text-2xl portrait:text-xl">
             <tr v-for="bus in toRoute.slice(0,5)"
                 class="border-b">
-              <td class="py-2 px-4 font-semibold w-48"
+              <td class="py-2 px-4 font-semibold min-w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="py-2 px-4 font-semibold">
+                  class="py-2 px-4 font-semibold min-w-48">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
                   <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
-              <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
+              <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
               <td class="p-2">{{bus.DestinationName50}}</td>
               <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
             </tr>
