@@ -52,7 +52,7 @@
 
     <div>
       <div class="toCentral bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
           Bushalte Oude Baan naar centraal station
         </h2>
 
@@ -69,18 +69,20 @@
           <tbody class="text-2xl">
             <tr v-for="bus in toCentral.slice(0,5)"
                 class="text-center border-b">
-              <td class="p-1"
+              <td class="p-1 font-semibold"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="p-2">
-                <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-                <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+                  class="p-2 font-semibold">
+                <div class="inline-block relative">
+                  <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                </div>
               </td>
               <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
               <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="p-2">{{bus.LinePublicNumber}}</td>
+              <td class="p-2 font-semibold">{{bus.LinePublicNumber}}</td>
             </tr>
           </tbody>
         </table>
@@ -89,7 +91,7 @@
 
     <div class="flex justify-end">
       <div class="toRoute bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
           Bushalte Oude Baan richting Terheijden
         </h2>
 
@@ -106,18 +108,20 @@
           <tbody class="text-2xl">
             <tr v-for="bus in toRoute.slice(0,5)"
                 class="text-center border-b">
-              <td class="p-2"
+              <td class="p-2 font-semibold"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="p-2">
-                <div><s>{{ formatDate(bus.TargetArrivalTime) }}</s></div>
-                <b style="color:red;">{{ formatDate(bus.ExpectedArrivalTime) }}</b>
+                  class="p-2 font-semibold">
+                <div class="inline-block relative">
+                  <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                </div>
               </td>
               <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
               <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="p-2">{{bus.LinePublicNumber}}</td>
+              <td class="p-2 font-semibold">{{bus.LinePublicNumber}}</td>
             </tr>
           </tbody>
         </table>
