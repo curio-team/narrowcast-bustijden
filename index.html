@@ -58,31 +58,31 @@
 
         <table class="table-auto w-full">
           <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
-            <tr class="text-center">
-              <th class="p-1">Vertrektijd</th>
-              <th class="p-1">Status</th>
-              <th class="p-1">Eindpunt</th>
-              <th class="p-1">Lijn</th>
+            <tr class="text-left">
+              <th class="py-2 px-4">Vertrektijd</th>
+              <th class="py-2 px-4">Status</th>
+              <th class="py-2 px-4">Eindpunt</th>
+              <th class="py-2 px-4 text-end">Lijn</th>
             </tr>
           </thead>
 
-          <tbody class="text-2xl">
+          <tbody class="text-2xl portrait:text-xl">
             <tr v-for="bus in toCentral.slice(0,5)"
-                class="text-center border-b">
-              <td class="p-1 font-semibold"
+                class="border-b">
+              <td class="py-2 px-4 font-semibold w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="p-2 font-semibold">
+                  class="py-2 px-4 font-semibold">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
               <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
               <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="p-2 font-semibold">{{bus.LinePublicNumber}}</td>
+              <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
             </tr>
           </tbody>
         </table>
@@ -97,31 +97,31 @@
 
         <table class="table-auto w-full">
           <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
-            <tr class="text-center">
-              <th class="p-1">Vertrektijd</th>
-              <th class="p-1">Status</th>
-              <th class="p-1">Eindpunt</th>
-              <th class="p-1">Lijn</th>
+            <tr class="text-left">
+              <th class="py-2 px-4">Vertrektijd</th>
+              <th class="py-2 px-4">Status</th>
+              <th class="py-2 px-4">Eindpunt</th>
+              <th class="py-2 px-4 text-end">Lijn</th>
             </tr>
           </thead>
 
-          <tbody class="text-2xl">
+          <tbody class="text-2xl portrait:text-xl">
             <tr v-for="bus in toRoute.slice(0,5)"
-                class="text-center border-b">
-              <td class="p-2 font-semibold"
+                class="border-b">
+              <td class="py-2 px-4 font-semibold w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
                 {{ formatDate(bus.TargetArrivalTime) }}
               </td>
               <td v-else
-                  class="p-2 font-semibold">
+                  class="py-2 px-4 font-semibold">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
               <td class="p-2">{{translate(bus.TripStopStatus)}}</td>
               <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="p-2 font-semibold">{{bus.LinePublicNumber}}</td>
+              <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
             </tr>
           </tbody>
         </table>
