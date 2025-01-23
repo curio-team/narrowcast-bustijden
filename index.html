@@ -47,13 +47,14 @@
           class="fixed w-full h-full"></canvas>
 
   <div id="app"
-       class="absolute h-full w-full flex flex-col justify-between p-12 pb-20">
+       class="absolute h-full w-full flex flex-col justify-between p-12 pt-0 pb-20">
     {{ getData }}
 
     <div>
-      <div class="toCentral bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
-          Bushalte Oude Baan naar centraal station
+      <h1 class="p-8 font-bold text-4xl text-center text-curioPrimary">Bustijden</h1>
+      <div class="routeA bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
+        <h2
+            class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
@@ -67,7 +68,7 @@
           </thead>
 
           <tbody class="text-2xl portrait:text-xl">
-            <tr v-for="bus in toCentral.slice(0,5)"
+            <tr v-for="bus in routeA.slice(0,5)"
                 class="border-b">
               <td class="py-2 px-4 font-semibold min-w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
@@ -77,7 +78,8 @@
                   class="py-2 px-4 font-semibold min-w-48">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{
+                    formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
               <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
@@ -90,9 +92,9 @@
     </div>
 
     <div class="flex justify-end">
-      <div class="toRoute bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
-          Bushalte Oude Baan richting Terheijden
+      <div class="routeB bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
+        <h2
+            class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
@@ -106,7 +108,7 @@
           </thead>
 
           <tbody class="text-2xl portrait:text-xl">
-            <tr v-for="bus in toRoute.slice(0,5)"
+            <tr v-for="bus in routeB.slice(0,5)"
                 class="border-b">
               <td class="py-2 px-4 font-semibold min-w-48"
                   v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
@@ -116,7 +118,8 @@
                   class="py-2 px-4 font-semibold min-w-48">
                 <div class="inline-block relative">
                   <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{ formatDate(bus.TargetArrivalTime) }}</span>
+                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{
+                    formatDate(bus.TargetArrivalTime) }}</span>
                 </div>
               </td>
               <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
@@ -134,9 +137,6 @@
   </div>
 
   <script>
-    const TO_CENTRAL_ID = 72000640;
-    const TO_ROUTE_ID = 72000810;
-
     function sortPasses(passes) {
       return Object.values(passes)
         .sort(
@@ -150,6 +150,7 @@
     }
 
     let currentBusAnimationId = 0;
+    let stopAreaCode = 'BdOud';
     const busAnimationData = [];
 
     // Animation constants
@@ -189,13 +190,20 @@
     Vue.createApp({
       data() {
         return {
-          toCentral: [],
-          toRoute: []
+          routeA: [],
+          routeB: []
         }
       },
       computed: {
         getData() {
-          let url = 'https://bustijden.curio.codes';
+          // Check if there's an ID for the bus stops in the query parameters
+          const urlParams = new URLSearchParams(window.location.search);
+
+          if (urlParams.has('stopAreaCode')) {
+            stopAreaCode = urlParams.get('stopAreaCode');
+          }
+
+          let url = 'https://bustijden.curio.codes/?stopAreaCode=' + stopAreaCode;
           const options = {
             method: 'GET'
           }
@@ -203,18 +211,51 @@
           if (isLocalhost()) {
             // Note that you will have to open this URL in the browser and accept the risk
             // before it will load the data.
-            url = 'http://v0.ovapi.nl/stopareacode/BdOud';
+            url = 'http://v0.ovapi.nl/stopareacode/' + stopAreaCode;
 
             // If you want live data, comment the line below. We use this static data during
             // development to prevent hitting any API rate limit.
+            // This test data only contains data for the 'bdOud' stopAreaCode.
             url = 'test-data.json';
           }
 
           fetch(url, options)
             .then((response) => response.json())
             .then((data) => {
-              this.toCentral = sortPasses(data.BdOud[TO_CENTRAL_ID].Passes);
-              this.toRoute = sortPasses(data.BdOud[TO_ROUTE_ID].Passes);
+              const routes = {
+                routeA: {
+                  element: document.querySelector('.routeA'),
+                  id: 72000640,
+                },
+                routeB: {
+                  element: document.querySelector('.routeB'),
+                  id: 72000810,
+                }
+              };
+
+              let index = 0;
+
+              for (const route in routes) {
+                if (urlParams.has(route)) {
+                  const routeId = urlParams.get(route);
+                  routes[route].id = routeId;
+                } else if (urlParams.has('stopAreaCode')) {
+                  // Deduce the route ID's by looking at the data keys
+                  const keys = Object.keys(data[stopAreaCode]);
+                  routes[route].id = keys[index];
+                }
+
+                const routeData = data[stopAreaCode][routes[route].id];
+
+                // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
+                // Since the stop is the same on both sides, let's hide the heading for now and show the common name
+                // as the h1
+                routes[route].element.querySelector('h2').style.display = 'none';
+                document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
+                this[route] = sortPasses(routeData.Passes);
+
+                index++;
+              }
 
               // TODO: Draw the bus animations based on real arrival times
               // To use the API data, we could determine the arrival time and if it's close enough to the current time,
@@ -276,12 +317,12 @@
     const busOriginalSize = 350;
     const stopSignOriginalSize = 194;
     const backgroundOriginalPointsOfInterest = {
-      toCentral: {
+      routeA: {
         spawn: { x: 1259, y: -259 },
         stop: { x: 268, y: 314 },
         destination: { x: -800, y: 900 },
       },
-      toRoute: {
+      routeB: {
         spawn: { x: -812, y: 1118 },
         stop: { x: 488, y: 446 },
         destination: { x: 1475, y: -100 },
@@ -331,15 +372,15 @@
       }
 
       pointsOfInterest = {
-        toCentral: {
-          spawn: scalePoint(backgroundOriginalPointsOfInterest.toCentral.spawn),
-          stop: scalePoint(backgroundOriginalPointsOfInterest.toCentral.stop),
-          destination: scalePoint(backgroundOriginalPointsOfInterest.toCentral.destination)
+        routeA: {
+          spawn: scalePoint(backgroundOriginalPointsOfInterest.routeA.spawn),
+          stop: scalePoint(backgroundOriginalPointsOfInterest.routeA.stop),
+          destination: scalePoint(backgroundOriginalPointsOfInterest.routeA.destination)
         },
-        toRoute: {
-          spawn: scalePoint(backgroundOriginalPointsOfInterest.toRoute.spawn),
-          stop: scalePoint(backgroundOriginalPointsOfInterest.toRoute.stop),
-          destination: scalePoint(backgroundOriginalPointsOfInterest.toRoute.destination)
+        routeB: {
+          spawn: scalePoint(backgroundOriginalPointsOfInterest.routeB.spawn),
+          stop: scalePoint(backgroundOriginalPointsOfInterest.routeB.stop),
+          destination: scalePoint(backgroundOriginalPointsOfInterest.routeB.destination)
         },
         stopSignRoute: scalePoint(backgroundOriginalPointsOfInterest.stopSignRoute)
       };
@@ -395,15 +436,15 @@
       // A bus that goes to the stop and when it arrives, after 2 seconds, it goes to the central destination
       addBusToAnimationData(
         busToCentral,
-        pointsOfInterest.toCentral.spawn,
-        pointsOfInterest.toCentral.stop,
+        pointsOfInterest.routeA.spawn,
+        pointsOfInterest.routeA.stop,
         fadeMode(FADE_IN),
         (bus, index) => {
           setTimeout(() => {
             addBusToAnimationData(
               busToCentral,
-              pointsOfInterest.toCentral.stop,
-              pointsOfInterest.toCentral.destination,
+              pointsOfInterest.routeA.stop,
+              pointsOfInterest.routeA.destination,
               fadeMode(FADE_OUT),
             );
             removeBusFromAnimationData(index);
@@ -414,15 +455,15 @@
       // Bus the other way around
       addBusToAnimationData(
         busToRoute,
-        pointsOfInterest.toRoute.spawn,
-        pointsOfInterest.toRoute.stop,
+        pointsOfInterest.routeB.spawn,
+        pointsOfInterest.routeB.stop,
         fadeMode(FADE_IN),
         (bus, index) => {
           setTimeout(() => {
             addBusToAnimationData(
               busToRoute,
-              pointsOfInterest.toRoute.stop,
-              pointsOfInterest.toRoute.destination,
+              pointsOfInterest.routeB.stop,
+              pointsOfInterest.routeB.destination,
               fadeMode(FADE_OUT),
             );
             removeBusFromAnimationData(index);
