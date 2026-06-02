@@ -229,55 +229,56 @@
           }
 
           fetch(url, options)
-            .then((response) => response.json().then((data) => ({ ok: response.ok, data })))
-            .then(({ ok, data }) => {
-              if (!ok) {
-                this.error = data.error ?? 'Onbekende fout';
-                return;
+            .then((response) => {
+              if (!response.ok) {
+                return response.json()
+                  .then((data) => { this.error = data.error ?? 'Onbekende fout'; })
+                  .catch(() => { this.error = `HTTP ${response.status}`; });
               }
+              return response.json().then((data) => {
+                this.error = null;
+                const routes = {
+                  routeA: {
+                    element: document.querySelector('.routeA'),
+                    id: 72000640,
+                  },
+                  routeB: {
+                    element: document.querySelector('.routeB'),
+                    id: 72000810,
+                  }
+                };
 
-              this.error = null;
-              const routes = {
-                routeA: {
-                  element: document.querySelector('.routeA'),
-                  id: 72000640,
-                },
-                routeB: {
-                  element: document.querySelector('.routeB'),
-                  id: 72000810,
+                let index = 0;
+
+                for (const route in routes) {
+                  if (urlParams.has(route)) {
+                    const routeId = urlParams.get(route);
+                    routes[route].id = routeId;
+                  } else if (urlParams.has('stopAreaCode')) {
+                    // Deduce the route ID's by looking at the data keys
+                    const keys = Object.keys(data[stopAreaCode]);
+                    routes[route].id = keys[index];
+                  }
+
+                  const routeData = data[stopAreaCode][routes[route].id];
+
+                  // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
+                  // Since the stop is the same on both sides, let's hide the heading for now and show the common name
+                  // as the h1
+                  routes[route].element.querySelector('h2').style.display = 'none';
+                  document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
+                  this[route] = sortPasses(routeData.Passes);
+
+                  index++;
                 }
-              };
 
-              let index = 0;
-
-              for (const route in routes) {
-                if (urlParams.has(route)) {
-                  const routeId = urlParams.get(route);
-                  routes[route].id = routeId;
-                } else if (urlParams.has('stopAreaCode')) {
-                  // Deduce the route ID's by looking at the data keys
-                  const keys = Object.keys(data[stopAreaCode]);
-                  routes[route].id = keys[index];
-                }
-
-                const routeData = data[stopAreaCode][routes[route].id];
-
-                // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
-                // Since the stop is the same on both sides, let's hide the heading for now and show the common name
-                // as the h1
-                routes[route].element.querySelector('h2').style.display = 'none';
-                document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
-                this[route] = sortPasses(routeData.Passes);
-
-                index++;
-              }
-
-              // TODO: Draw the bus animations based on real arrival times
-              // To use the API data, we could determine the arrival time and if it's close enough to the current time,
-              // we could add a bus to the animation data to show it arriving and going to the destination.
+                // TODO: Draw the bus animations based on real arrival times
+                // To use the API data, we could determine the arrival time and if it's close enough to the current time,
+                // we could add a bus to the animation data to show it arriving and going to the destination.
+              });
             })
             .catch((err) => {
-              this.error = err.message ?? 'Netwerkfout';
+              this.error = err.message ?? 'Verbindingsfout';
             });
         }
       },
