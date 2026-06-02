@@ -50,7 +50,15 @@
        class="absolute h-full w-full flex flex-col justify-between p-12 pt-0 pb-20">
     {{ getData }}
 
-    <div>
+    <div v-if="error"
+         class="absolute inset-0 flex items-center justify-center">
+      <div class="bg-white/80 rounded-xl shadow-lg p-10 text-center max-w-lg">
+        <p class="text-3xl font-bold text-red-600 mb-4">Fout bij laden</p>
+        <p class="text-xl text-curioPrimary font-mono break-all">{{ error }}</p>
+      </div>
+    </div>
+
+    <div v-show="!error">
       <h1 class="p-8 font-bold text-4xl text-center text-curioPrimary">Bustijden</h1>
       <div class="routeA bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
         <h2
@@ -91,7 +99,7 @@
       </div>
     </div>
 
-    <div class="flex justify-end">
+    <div v-show="!error" class="flex justify-end">
       <div class="routeB bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
         <h2
             class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
@@ -191,7 +199,8 @@
       data() {
         return {
           routeA: [],
-          routeB: []
+          routeB: [],
+          error: null
         }
       },
       computed: {
@@ -220,46 +229,56 @@
           }
 
           fetch(url, options)
-            .then((response) => response.json())
-            .then((data) => {
-              const routes = {
-                routeA: {
-                  element: document.querySelector('.routeA'),
-                  id: 72000640,
-                },
-                routeB: {
-                  element: document.querySelector('.routeB'),
-                  id: 72000810,
-                }
-              };
-
-              let index = 0;
-
-              for (const route in routes) {
-                if (urlParams.has(route)) {
-                  const routeId = urlParams.get(route);
-                  routes[route].id = routeId;
-                } else if (urlParams.has('stopAreaCode')) {
-                  // Deduce the route ID's by looking at the data keys
-                  const keys = Object.keys(data[stopAreaCode]);
-                  routes[route].id = keys[index];
-                }
-
-                const routeData = data[stopAreaCode][routes[route].id];
-
-                // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
-                // Since the stop is the same on both sides, let's hide the heading for now and show the common name
-                // as the h1
-                routes[route].element.querySelector('h2').style.display = 'none';
-                document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
-                this[route] = sortPasses(routeData.Passes);
-
-                index++;
+            .then((response) => {
+              if (!response.ok) {
+                return response.json()
+                  .then((data) => { this.error = data.error ?? 'Onbekende fout'; })
+                  .catch(() => { this.error = `HTTP ${response.status}`; });
               }
+              return response.json().then((data) => {
+                this.error = null;
+                const routes = {
+                  routeA: {
+                    element: document.querySelector('.routeA'),
+                    id: 72000640,
+                  },
+                  routeB: {
+                    element: document.querySelector('.routeB'),
+                    id: 72000810,
+                  }
+                };
 
-              // TODO: Draw the bus animations based on real arrival times
-              // To use the API data, we could determine the arrival time and if it's close enough to the current time,
-              // we could add a bus to the animation data to show it arriving and going to the destination.
+                let index = 0;
+
+                for (const route in routes) {
+                  if (urlParams.has(route)) {
+                    const routeId = urlParams.get(route);
+                    routes[route].id = routeId;
+                  } else if (urlParams.has('stopAreaCode')) {
+                    // Deduce the route ID's by looking at the data keys
+                    const keys = Object.keys(data[stopAreaCode]);
+                    routes[route].id = keys[index];
+                  }
+
+                  const routeData = data[stopAreaCode][routes[route].id];
+
+                  // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
+                  // Since the stop is the same on both sides, let's hide the heading for now and show the common name
+                  // as the h1
+                  routes[route].element.querySelector('h2').style.display = 'none';
+                  document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
+                  this[route] = sortPasses(routeData.Passes);
+
+                  index++;
+                }
+
+                // TODO: Draw the bus animations based on real arrival times
+                // To use the API data, we could determine the arrival time and if it's close enough to the current time,
+                // we could add a bus to the animation data to show it arriving and going to the destination.
+              });
+            })
+            .catch((err) => {
+              this.error = err.message ?? 'Verbindingsfout';
             });
         }
       },
