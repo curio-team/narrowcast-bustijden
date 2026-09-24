@@ -510,6 +510,8 @@
 
     const MAX_WAITING_STUDENTS_PER_ROUTE = 300; // cap so a 24/7 display doesn't grow unbounded
 
+    let studentSequenceCounter = 0;
+
     function countWaitingStudents(routeKey) {
       let count = 0;
       studentAnimationData.forEach((student) => {
@@ -520,9 +522,18 @@
       return count;
     }
 
-    // Spawns students in single file along the anchor<->spawn line. Defaults to 1-4; pass
-    // count to override. New arrivals queue up behind whoever's already waiting.
-    function spawnStudentsForStop(routeKey, count) {
+    function getWaitingStudentsSorted(routeKey) {
+      const list = [];
+      studentAnimationData.forEach((student) => {
+        if (student.route === routeKey && student.boardStartTime === null) {
+          list.push(student);
+        }
+      });
+      list.sort((a, b) => a.seq - b.seq);
+      return list;
+    }
+
+    function computeQueueGeometry(routeKey) {
       const stop = pointsOfInterest[routeKey].stop;
       const tuning = studentTuning[routeKey];
 
@@ -537,12 +548,59 @@
 
       const lineVec = { x: anchor.x - frontSpawn.x, y: anchor.y - frontSpawn.y };
       const lineLength = Math.hypot(lineVec.x, lineVec.y) || 1;
-      const dir = { x: lineVec.x / lineLength, y: lineVec.y / lineLength }; // walking direction
+      const dir = { x: lineVec.x / lineLength, y: lineVec.y / lineLength };
       const perp = { x: -dir.y, y: dir.x };
 
-      const spacing = scaleOriginalOffset({ x: tuning.spacing, y: 0 }).x; // gap between students in line
+      const spacing = scaleOriginalOffset({ x: tuning.spacing, y: 0 }).x;
       const jitterMag = scaleOriginalOffset({ x: tuning.perpJitter, y: 0 }).x;
 
+      return { anchor, frontSpawn, dir, perp, spacing, jitterMag, lineLength };
+    }
+
+    function getStudentPos(student, now) {
+      const progress = Math.max(0, Math.min(1, (now - student.moveStartTime) / student.moveDuration));
+      return {
+        x: student.moveFrom.x + (student.moveTo.x - student.moveFrom.x) * progress,
+        y: student.moveFrom.y + (student.moveTo.y - student.moveFrom.y) * progress
+      };
+    }
+
+    // Recomputes everyone's spot in a route's queue (bunched up, not an even grid) and scoots
+    // anyone whose spot moved forward - e.g. after people ahead of them board.
+    function repositionRoute(routeKey) {
+      const geo = computeQueueGeometry(routeKey);
+      const waiting = getWaitingStudentsSorted(routeKey);
+      const now = Date.now();
+      let cumulative = 0;
+
+      waiting.forEach((student) => {
+        cumulative += student.gapToPrev;
+
+        const target = {
+          x: geo.anchor.x - geo.dir.x * cumulative + geo.perp.x * student.perpOffset,
+          y: geo.anchor.y - geo.dir.y * cumulative + geo.perp.y * student.perpOffset
+        };
+
+        if (target.x === student.moveTo.x && target.y === student.moveTo.y) {
+          return;
+        }
+
+        if (now < student.spawnTime) {
+          student.moveTo = target; // not walking yet, just update where they'll head
+          return;
+        }
+
+        student.moveFrom = getStudentPos(student, now);
+        student.moveTo = target;
+        student.moveStartTime = now;
+        student.moveDuration = randomBetween(300, 600); // a short scoot forward
+      });
+    }
+
+    // Spawns students that queue up bunched together (not a rigid line) behind whoever's
+    // already waiting. Defaults to 1-4; pass count to override.
+    function spawnStudentsForStop(routeKey, count) {
+      const geo = computeQueueGeometry(routeKey);
       const spawnCount = count !== undefined ? count : 1 + Math.floor(Math.random() * 4);
       const startIndex = countWaitingStudents(routeKey);
       const actualCount = Math.max(0, Math.min(spawnCount, MAX_WAITING_STUDENTS_PER_ROUTE - startIndex));
@@ -550,37 +608,40 @@
       for (let n = 0; n < actualCount; n++) {
         const i = startIndex + n;
         const spawnDelay = randomBetween(0, 500);
-        const walkDuration = randomBetween(1100, 1900);
-        const jitter = randomBetween(-jitterMag, jitterMag);
+        const gapToPrev = randomBetween(geo.spacing * 0.45, geo.spacing * 1.0); // tighter, uneven gaps
+        const perpOffset = randomBetween(-geo.jitterMag * 2.5, geo.jitterMag * 2.5); // spread sideways, not a straight line
 
-        const waitPos = {
-          x: anchor.x - dir.x * spacing * i,
-          y: anchor.y - dir.y * spacing * i
-        };
-
-        // Further back in the queue = further back along the same line, so the queue visibly forms
+        const roughDistance = geo.lineLength + geo.spacing * i;
         const spawnPos = {
-          x: anchor.x - dir.x * (lineLength + spacing * i) + perp.x * jitter,
-          y: anchor.y - dir.y * (lineLength + spacing * i) + perp.y * jitter
+          x: geo.anchor.x - geo.dir.x * roughDistance + geo.perp.x * perpOffset,
+          y: geo.anchor.y - geo.dir.y * roughDistance + geo.perp.y * perpOffset
         };
 
         studentAnimationData[currentStudentAnimationId] = {
           route: routeKey,
-          spawnPos,
-          waitPos,
+          seq: studentSequenceCounter++,
+          gapToPrev,
+          perpOffset,
           spawnTime: Date.now() + spawnDelay,
-          walkDuration,
+          moveFrom: spawnPos,
+          moveTo: spawnPos,
+          moveStartTime: Date.now() + spawnDelay,
+          moveDuration: randomBetween(1100, 1900),
           boardStartTime: null,
           boardDuration: null,
+          boardPos: null,
           bouncePhase: randomBetween(0, Math.PI * 2),
           bounceSpeed: randomBetween(160, 220),
           flip: Math.random() < 0.5
         };
         currentStudentAnimationId++;
       }
+
+      repositionRoute(routeKey);
     }
 
-    // Fades out waiting students in place to simulate boarding. No limit = everyone boards.
+    // Fades out waiting students in place to simulate boarding, then scoots the rest forward.
+    // No limit = everyone boards.
     function boardStudentsAtStop(routeKey, limit) {
       const now = Date.now();
       let boarded = 0;
@@ -594,10 +655,15 @@
           return;
         }
 
+        student.boardPos = getStudentPos(student, now);
         student.boardStartTime = now + randomBetween(0, 250);
         student.boardDuration = randomBetween(350, 500);
         boarded++;
       });
+
+      if (boarded > 0) {
+        repositionRoute(routeKey);
+      }
     }
 
     function removeStudentFromAnimationData(index) {
@@ -728,8 +794,8 @@
           if (student.boardStartTime !== null && now >= student.boardStartTime) {
             const progress = Math.min(1, (now - student.boardStartTime) / student.boardDuration);
 
-            x = student.waitPos.x;
-            y = student.waitPos.y;
+            x = student.boardPos.x;
+            y = student.boardPos.y;
             alpha = 1 - progress;
             walking = false;
 
@@ -738,12 +804,12 @@
               return;
             }
           } else {
-            const progress = Math.min(1, (now - student.spawnTime) / student.walkDuration);
+            const pos = getStudentPos(student, now);
 
-            x = student.spawnPos.x + (student.waitPos.x - student.spawnPos.x) * progress;
-            y = student.spawnPos.y + (student.waitPos.y - student.spawnPos.y) * progress;
+            x = pos.x;
+            y = pos.y;
             alpha = 1;
-            walking = progress < 1;
+            walking = now < student.moveStartTime + student.moveDuration;
           }
 
           drawStudent(student, x, y, walking, alpha);
