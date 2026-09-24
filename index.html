@@ -61,8 +61,7 @@
     <div v-show="!error">
       <h1 class="p-8 font-bold text-4xl text-center text-curioPrimary">Bustijden</h1>
       <div class="routeA bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2
-            class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
@@ -99,10 +98,10 @@
       </div>
     </div>
 
-    <div v-show="!error" class="flex justify-end">
+    <div v-show="!error"
+         class="flex justify-end">
       <div class="routeB bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2
-            class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
@@ -272,6 +271,12 @@
                   index++;
                 }
 
+                // Auto-enable crowdedMode when every displayed departure is delayed
+                const displayedRows = [...this.routeA.slice(0, 5), ...this.routeB.slice(0, 5)];
+                if (displayedRows.length > 0 && displayedRows.every((bus) => bus.ExpectedArrivalTime !== bus.TargetArrivalTime)) {
+                  window.crowdedMode = true;
+                }
+
                 // TODO: Draw the bus animations based on real arrival times
                 // To use the API data, we could determine the arrival time and if it's close enough to the current time,
                 // we could add a bus to the animation data to show it arriving and going to the destination.
@@ -331,10 +336,15 @@
     const stopSignRoute = new Image();
     stopSignRoute.src = 'assets/stop.png';
 
+    const studentImage = new Image();
+    studentImage.src = 'assets/student.png';
+    const studentImageAspect = 43 / 103; // width / height of the source image
+
     // Original image pixel sizes and points of interest (x and y of top-left of bus image)
     const backgroundOriginalSize = 990;
     const busOriginalSize = 350;
     const stopSignOriginalSize = 194;
+    const studentOriginalHeight = 70; // students are drawn much smaller than the bus/stop sign
     const backgroundOriginalPointsOfInterest = {
       routeA: {
         spawn: { x: 1259, y: -259 },
@@ -352,6 +362,7 @@
     // Scaled bus size and points of interest
     let busSize = busOriginalSize;
     let stopSignSize = stopSignOriginalSize;
+    let studentSize = { width: 0, height: 0 };
     let drawArea = {};
     let pointsOfInterest = {};
 
@@ -389,6 +400,9 @@
         width: smallestDimension * stopSignOriginalSize / backgroundOriginalSize,
         height: smallestDimension * stopSignOriginalSize / backgroundOriginalSize
       }
+
+      studentSize.height = smallestDimension * studentOriginalHeight / backgroundOriginalSize;
+      studentSize.width = studentSize.height * studentImageAspect;
 
       pointsOfInterest = {
         routeA: {
@@ -429,6 +443,29 @@
       backgroundCanvas.drawImage(stopSignRoute, pointsOfInterest.stopSignRoute.x, pointsOfInterest.stopSignRoute.y, stopSignSize.width, stopSignSize.height);
     }
 
+    // Draws a student standing on their feet at (x, y), optionally bouncing like they're walking
+    function drawStudent(student, x, y, walking, alpha) {
+      let drawY = y;
+
+      if (walking) {
+        const bounce = Math.abs(Math.sin((Date.now() + student.bouncePhase) / student.bounceSpeed));
+        drawY -= bounce * studentSize.height * 0.18;
+      }
+
+      backgroundCanvas.save();
+      backgroundCanvas.globalAlpha = alpha;
+
+      if (student.flip) {
+        backgroundCanvas.translate(x, 0);
+        backgroundCanvas.scale(-1, 1);
+        backgroundCanvas.drawImage(studentImage, -studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
+      } else {
+        backgroundCanvas.drawImage(studentImage, x - studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
+      }
+
+      backgroundCanvas.restore();
+    }
+
     let debugHelpFindBusPositions = false;
     let mouseX = 0;
     let mouseY = 0;
@@ -447,11 +484,147 @@
       });
     }
 
+    // Students walk up to a stop before the bus arrives, wait, then board.
+    let currentStudentAnimationId = 0;
+    const studentAnimationData = [];
+
+    function randomBetween(min, max) {
+      return min + Math.random() * (max - min);
+    }
+
+    // Scales an offset in the original 990x990 space into canvas pixels (no drawArea.x/y, it's a delta)
+    function scaleOriginalOffset(offset) {
+      const scale = drawArea.width / backgroundOriginalSize;
+      return { x: offset.x * scale, y: offset.y * scale };
+    }
+
+    // Pixel offsets from each stop (same coord space as backgroundOriginalPointsOfInterest):
+    // anchorOffset = front of the queue, spawnOffset = where the line starts from.
+    const studentTuning = {
+      routeA: { anchorOffset: { x: 50, y: 222 }, spawnOffset: { x: 600, y: -100 }, spacing: 60, perpJitter: 8 },
+      routeB: { anchorOffset: { x: 390, y: 190 }, spawnOffset: { x: -250, y: 600 }, spacing: 60, perpJitter: 8 }
+    };
+
+    // Console/auto toggle: while true, students pile up faster than busses clear them (see showTestBusses)
+    window.crowdedMode = false;
+
+    const MAX_WAITING_STUDENTS_PER_ROUTE = 300; // cap so a 24/7 display doesn't grow unbounded
+
+    function countWaitingStudents(routeKey) {
+      let count = 0;
+      studentAnimationData.forEach((student) => {
+        if (student.route === routeKey && student.boardStartTime === null) {
+          count++;
+        }
+      });
+      return count;
+    }
+
+    // Spawns students in single file along the anchor<->spawn line. Defaults to 1-4; pass
+    // count to override. New arrivals queue up behind whoever's already waiting.
+    function spawnStudentsForStop(routeKey, count) {
+      const stop = pointsOfInterest[routeKey].stop;
+      const tuning = studentTuning[routeKey];
+
+      const anchor = {
+        x: stop.x + scaleOriginalOffset(tuning.anchorOffset).x,
+        y: stop.y + scaleOriginalOffset(tuning.anchorOffset).y
+      };
+      const frontSpawn = {
+        x: stop.x + scaleOriginalOffset(tuning.spawnOffset).x,
+        y: stop.y + scaleOriginalOffset(tuning.spawnOffset).y
+      };
+
+      const lineVec = { x: anchor.x - frontSpawn.x, y: anchor.y - frontSpawn.y };
+      const lineLength = Math.hypot(lineVec.x, lineVec.y) || 1;
+      const dir = { x: lineVec.x / lineLength, y: lineVec.y / lineLength }; // walking direction
+      const perp = { x: -dir.y, y: dir.x };
+
+      const spacing = scaleOriginalOffset({ x: tuning.spacing, y: 0 }).x; // gap between students in line
+      const jitterMag = scaleOriginalOffset({ x: tuning.perpJitter, y: 0 }).x;
+
+      const spawnCount = count !== undefined ? count : 1 + Math.floor(Math.random() * 4);
+      const startIndex = countWaitingStudents(routeKey);
+      const actualCount = Math.max(0, Math.min(spawnCount, MAX_WAITING_STUDENTS_PER_ROUTE - startIndex));
+
+      for (let n = 0; n < actualCount; n++) {
+        const i = startIndex + n;
+        const spawnDelay = randomBetween(0, 500);
+        const walkDuration = randomBetween(1100, 1900);
+        const jitter = randomBetween(-jitterMag, jitterMag);
+
+        const waitPos = {
+          x: anchor.x - dir.x * spacing * i,
+          y: anchor.y - dir.y * spacing * i
+        };
+
+        // Further back in the queue = further back along the same line, so the queue visibly forms
+        const spawnPos = {
+          x: anchor.x - dir.x * (lineLength + spacing * i) + perp.x * jitter,
+          y: anchor.y - dir.y * (lineLength + spacing * i) + perp.y * jitter
+        };
+
+        studentAnimationData[currentStudentAnimationId] = {
+          route: routeKey,
+          spawnPos,
+          waitPos,
+          spawnTime: Date.now() + spawnDelay,
+          walkDuration,
+          boardStartTime: null,
+          boardDuration: null,
+          bouncePhase: randomBetween(0, Math.PI * 2),
+          bounceSpeed: randomBetween(160, 220),
+          flip: Math.random() < 0.5
+        };
+        currentStudentAnimationId++;
+      }
+    }
+
+    // Fades out waiting students in place to simulate boarding. No limit = everyone boards.
+    function boardStudentsAtStop(routeKey, limit) {
+      const now = Date.now();
+      let boarded = 0;
+
+      studentAnimationData.forEach((student) => {
+        if (student.route !== routeKey || student.boardStartTime !== null) {
+          return;
+        }
+
+        if (limit !== undefined && boarded >= limit) {
+          return;
+        }
+
+        student.boardStartTime = now + randomBetween(0, 250);
+        student.boardDuration = randomBetween(350, 500);
+        boarded++;
+      });
+    }
+
+    function removeStudentFromAnimationData(index) {
+      delete studentAnimationData[index];
+    }
+
+    const CROWDED_BUS_EVERY_N_CYCLES = 4; // in crowdedMode, busses only show up 1 cycle in N
+    let busCycleCount = 0;
+
     /*
     ** Bus animations to have it go from one point to another
     */
     // TODO: Actually draw busses based on the API data, for now we just show busses arriving and going
     function showTestBusses() {
+      busCycleCount++;
+
+      const crowded = window.crowdedMode === true;
+      const studentCount = crowded ? 15 + Math.floor(Math.random() * 15) : undefined;
+      spawnStudentsForStop('routeA', studentCount);
+      spawnStudentsForStop('routeB', studentCount);
+
+      if (crowded && busCycleCount % CROWDED_BUS_EVERY_N_CYCLES !== 0) {
+        return; // skip this cycle's busses
+      }
+
+      const boardLimit = () => (window.crowdedMode === true ? 2 + Math.floor(Math.random() * 3) : undefined);
+
       // A bus that goes to the stop and when it arrives, after 2 seconds, it goes to the central destination
       addBusToAnimationData(
         busToCentral,
@@ -459,6 +632,7 @@
         pointsOfInterest.routeA.stop,
         fadeMode(FADE_IN),
         (bus, index) => {
+          boardStudentsAtStop('routeA', boardLimit());
           setTimeout(() => {
             addBusToAnimationData(
               busToCentral,
@@ -478,6 +652,7 @@
         pointsOfInterest.routeB.stop,
         fadeMode(FADE_IN),
         (bus, index) => {
+          boardStudentsAtStop('routeB', boardLimit());
           setTimeout(() => {
             addBusToAnimationData(
               busToRoute,
@@ -509,36 +684,76 @@
 
       const now = new Date().getTime();
 
-      busAnimationData.forEach((bus, index) => {
-        const elapsedTime = now - bus.startTime;
+      function drawBuses() {
+        busAnimationData.forEach((bus, index) => {
+          const elapsedTime = now - bus.startTime;
 
-        let alpha = 1;
-        let x, y;
-        let progress = elapsedTime / bus.travelDuration;
+          let alpha = 1;
+          let x, y;
+          let progress = elapsedTime / bus.travelDuration;
 
-        if (bus.fadeMode && bus.fadeMode.mode === FADE_IN) {
-          alpha = Math.min(1, elapsedTime / bus.fadeMode.duration);
-        } else if (bus.fadeMode && bus.fadeMode.mode === FADE_OUT) {
-          alpha = Math.max(0, 1 - (elapsedTime + bus.fadeMode.duration - bus.travelDuration) / bus.fadeMode.duration);
-        }
+          if (bus.fadeMode && bus.fadeMode.mode === FADE_IN) {
+            alpha = Math.min(1, elapsedTime / bus.fadeMode.duration);
+          } else if (bus.fadeMode && bus.fadeMode.mode === FADE_OUT) {
+            alpha = Math.max(0, 1 - (elapsedTime + bus.fadeMode.duration - bus.travelDuration) / bus.fadeMode.duration);
+          }
 
-        if (progress < 1) {
-          x = bus.from.x + (bus.to.x - bus.from.x) * progress;
-          y = bus.from.y + (bus.to.y - bus.from.y) * progress;
-        } else {
-          x = bus.to.x;
-          y = bus.to.y;
-        }
+          if (progress < 1) {
+            x = bus.from.x + (bus.to.x - bus.from.x) * progress;
+            y = bus.from.y + (bus.to.y - bus.from.y) * progress;
+          } else {
+            x = bus.to.x;
+            y = bus.to.y;
+          }
 
-        backgroundCanvas.globalAlpha = alpha;
-        drawBus(bus.direction, x, y, progress < 1); // Only bounce if still moving
-        backgroundCanvas.globalAlpha = 1;
+          backgroundCanvas.globalAlpha = alpha;
+          drawBus(bus.direction, x, y, progress < 1); // Only bounce if still moving
+          backgroundCanvas.globalAlpha = 1;
 
-        if (progress > 1) {
-          bus.onArrivalCallback?.(bus, index);
-          bus.onArrivalCallback = null;
-        }
-      });
+          if (progress > 1) {
+            bus.onArrivalCallback?.(bus, index);
+            bus.onArrivalCallback = null;
+          }
+        });
+      }
+
+      function drawStudentsForRoute(routeKey) {
+        studentAnimationData.forEach((student, index) => {
+          if (student.route !== routeKey || now < student.spawnTime) {
+            return;
+          }
+
+          let x, y, alpha, walking;
+
+          if (student.boardStartTime !== null && now >= student.boardStartTime) {
+            const progress = Math.min(1, (now - student.boardStartTime) / student.boardDuration);
+
+            x = student.waitPos.x;
+            y = student.waitPos.y;
+            alpha = 1 - progress;
+            walking = false;
+
+            if (progress >= 1) {
+              removeStudentFromAnimationData(index);
+              return;
+            }
+          } else {
+            const progress = Math.min(1, (now - student.spawnTime) / student.walkDuration);
+
+            x = student.spawnPos.x + (student.waitPos.x - student.spawnPos.x) * progress;
+            y = student.spawnPos.y + (student.waitPos.y - student.spawnPos.y) * progress;
+            alpha = 1;
+            walking = progress < 1;
+          }
+
+          drawStudent(student, x, y, walking, alpha);
+        });
+      }
+
+      // routeA students draw under the bus, routeB students draw over it
+      drawStudentsForRoute('routeA');
+      drawBuses();
+      drawStudentsForRoute('routeB');
 
       drawStopSign();
 
