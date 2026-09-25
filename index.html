@@ -35,6 +35,36 @@
       width: 100%;
     }
 
+    /* These colors are blended between day and night by updateTimeOfDay() */
+    :root {
+      --sky-header-bg: rgba(86, 221, 239, 0.5);
+      --sky-title: #69197c;
+      --sky-panel-bg: rgba(255, 255, 255, 0.5);
+      --sky-text: #000;
+      --sky-border: #e5e7eb;
+    }
+
+    #app {
+      color: var(--sky-text);
+    }
+
+    #app .border-b {
+      border-color: var(--sky-border);
+    }
+
+    .sky-header {
+      background-color: var(--sky-header-bg);
+      color: var(--sky-title);
+    }
+
+    .sky-panel {
+      background-color: var(--sky-panel-bg);
+    }
+
+    .sky-title {
+      color: var(--sky-title);
+    }
+
     h2 {
       font-family: 'Arial', sans-serif;
       font-weight: bolder;
@@ -42,7 +72,8 @@
   </style>
 </head>
 
-<body class="bg-gradient-to-br from-curioPrimary/50 to-curioSecondary/50 flex items-center justify-center">
+<body class="flex items-center justify-center"
+      style="background-image: linear-gradient(to bottom right, #b48cbe, #aaeef7)">
   <canvas id="backgroundCanvas"
           class="fixed w-full h-full"></canvas>
 
@@ -59,13 +90,13 @@
     </div>
 
     <div v-show="!error">
-      <h1 class="p-8 font-bold text-4xl text-center text-curioPrimary">Bustijden</h1>
-      <div class="routeA bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+      <h1 class="p-8 font-bold text-4xl text-center sky-title">Bustijden</h1>
+      <div class="routeA sky-panel rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
+        <h2 class="text-3xl portrait:text-2xl sky-header text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
-          <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
+          <thead class="text-lg sky-header uppercase">
             <tr class="text-left">
               <th class="py-2 px-4 min-w-48">Vertrektijd</th>
               <!-- <th class="py-2 px-4">Status</th> -->
@@ -100,12 +131,12 @@
 
     <div v-show="!error"
          class="flex justify-end">
-      <div class="routeB bg-white/50 rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl bg-curioSecondary/50 text-curioPrimary text-center font-bold uppercase p-3">
+      <div class="routeB sky-panel rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
+        <h2 class="text-3xl portrait:text-2xl sky-header text-center font-bold uppercase p-3">
         </h2>
 
         <table class="table-auto w-full">
-          <thead class="text-lg bg-curioSecondary/50 text-curioPrimary uppercase">
+          <thead class="text-lg sky-header uppercase">
             <tr class="text-left">
               <th class="py-2 px-4 min-w-48">Vertrektijd</th>
               <!-- <th class="py-2 px-4">Status</th> -->
@@ -139,7 +170,7 @@
     </div>
   </div>
 
-  <div class="fixed bottom-0 w-full text-curioPrimary text-center p-4">
+  <div class="fixed bottom-0 w-full sky-title text-center p-4">
     <p class="text-xl font-bold">Let op: Alle vertrektijden zijn vanaf de halte.</p>
   </div>
 
@@ -330,6 +361,13 @@
     const busToRoute = new Image();
     busToRoute.src = 'assets/bus-to-route.png';
 
+    const busToCentralLights = new Image();
+    busToCentralLights.src = 'assets/bus-to-central-lights.png';
+
+    const busToRouteLights = new Image();
+    busToRouteLights.src = 'assets/bus-to-route-lights.png';
+    const lightsOriginalSize = 1000; // drawn at the same scale as the bus (busOriginalSize)
+
     const background = new Image();
     background.src = 'assets/background.png';
 
@@ -473,7 +511,104 @@
       }
 
       backgroundCanvas.drawImage(bus, x, y, busSize.width, busSize.height);
+
+      // Headlight overlay is 1000x1000 for a 350x350 bus, centered on the bus
+      const lights = bus === busToCentral ? busToCentralLights : bus === busToRoute ? busToRouteLights : null;
+      if (lights && currentDarkness > 0 && lights.complete && lights.naturalWidth) {
+        const lightsWidth = busSize.width * lightsOriginalSize / busOriginalSize;
+        const lightsHeight = busSize.height * lightsOriginalSize / busOriginalSize;
+        const previousAlpha = backgroundCanvas.globalAlpha;
+        backgroundCanvas.globalAlpha = previousAlpha * currentDarkness;
+        backgroundCanvas.filter = 'none'; // headlights glow, they shouldn't be darkened
+        backgroundCanvas.drawImage(
+          lights,
+          x + busSize.width / 2 - lightsWidth / 2,
+          y + busSize.height / 2 - lightsHeight / 2,
+          lightsWidth,
+          lightsHeight
+        );
+        backgroundCanvas.globalAlpha = previousAlpha;
+        backgroundCanvas.filter = nightFilter;
+      }
     }
+
+    /*
+    ** Time of day
+    */
+
+    // Estimates how dark it is in Amsterdam (0 = full daylight, 1 = night). Uses solar time
+    // (UTC + longitude offset), which sidesteps summer/wintertime: the sun is the same either way.
+    const amsterdamLongitude = 4.9;
+    // Set window.fakeTime in the console (a Date, timestamp or ISO string like '2026-12-01T23:00:00+01:00') to test other times
+    function getSunElevationHours() {
+      const date = window.fakeTime ? new Date(window.fakeTime) : new Date();
+      const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
+      const dayOfYear = (date.getTime() - startOfYear) / 86400000;
+      const halfDayLength = 6.15 + 2.2 * Math.cos(2 * Math.PI * (dayOfYear - 172) / 365); // ~4h (winter) to ~8.3h (summer)
+      const solarHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + amsterdamLongitude / 15) % 24;
+      return halfDayLength - Math.abs(solarHour - 12); // hours until sunrise/sunset; negative at night
+    }
+
+    // Gradient stops by hours of "daylight left" (top-left color, bottom-right color)
+    const skyStops = [
+      { e: -1.0, from: [10, 14, 44], to: [38, 24, 72] },      // night
+      { e: -0.2, from: [70, 40, 100], to: [200, 100, 110] },   // twilight
+      { e: 0.3, from: [255, 150, 110], to: [150, 110, 180] },  // sunrise/sunset
+      { e: 1.2, from: [180, 140, 190], to: [170, 238, 247] },  // day
+    ];
+
+    function mixColor(a, b, t) {
+      return a.map((v, i) => Math.round(v + (b[i] - v) * t));
+    }
+
+    function getSkyGradient(e) {
+      let lower = skyStops[0];
+      let upper = skyStops[skyStops.length - 1];
+      if (e <= lower.e) {
+        upper = lower;
+      } else if (e < upper.e) {
+        for (let i = 0; i < skyStops.length - 1; i++) {
+          if (e >= skyStops[i].e && e <= skyStops[i + 1].e) {
+            lower = skyStops[i];
+            upper = skyStops[i + 1];
+            break;
+          }
+        }
+      } else {
+        lower = upper;
+      }
+      const t = lower === upper ? 0 : (e - lower.e) / (upper.e - lower.e);
+      const from = mixColor(lower.from, upper.from, t);
+      const to = mixColor(lower.to, upper.to, t);
+      return `linear-gradient(to bottom right, rgb(${from}), rgb(${to}))`;
+    }
+
+    let currentDarkness = 0;
+    let lastSkyGradient = '';
+    function updateTimeOfDay() {
+      const e = getSunElevationHours();
+      currentDarkness = Math.min(1, Math.max(0, (0.2 - e) / 0.7)); // headlights fade in around dusk
+
+      const gradient = getSkyGradient(e);
+      if (gradient !== lastSkyGradient) {
+        document.body.style.backgroundImage = gradient;
+        lastSkyGradient = gradient;
+
+        const d = currentDarkness;
+        const root = document.documentElement.style;
+        root.setProperty('--sky-header-bg', `rgba(${mixColor([86, 221, 239], [30, 30, 78], d)}, ${0.5 + 0.25 * d})`);
+        root.setProperty('--sky-title', `rgb(${mixColor([105, 25, 124], [222, 208, 255], d)})`);
+        root.setProperty('--sky-panel-bg', `rgba(${mixColor([255, 255, 255], [14, 16, 44], d)}, ${0.5 + 0.15 * d})`);
+        root.setProperty('--sky-text', `rgb(${mixColor([0, 0, 0], [238, 238, 250], d)})`);
+        root.setProperty('--sky-border', `rgb(${mixColor([229, 231, 235], [60, 62, 100], d)})`);
+      }
+
+      // Darken and cool down the sprites (canvas filters aren't supported everywhere, then they stay bright)
+      nightFilter = currentDarkness > 0.01
+        ? `brightness(${1 - 0.5 * currentDarkness}) saturate(${1 - 0.25 * currentDarkness}) hue-rotate(${12 * currentDarkness}deg)`
+        : 'none';
+    }
+    let nightFilter = 'none';
 
     function drawBackground() {
       backgroundCanvas.drawImage(background, drawArea.x, drawArea.y, drawArea.width, drawArea.height);
@@ -776,6 +911,8 @@
 
     function draw() {
       backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      updateTimeOfDay();
+      backgroundCanvas.filter = nightFilter;
       drawBackground();
 
       if (debugHelpFindBusPositions) {
