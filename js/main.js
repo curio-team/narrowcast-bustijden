@@ -200,6 +200,7 @@ stopSignRoute.src = 'assets/stop.png';
 const studentImage = new Image();
 studentImage.src = 'assets/student.png';
 const studentImageAspect = 43 / 103; // width / height of the source image
+const studentClothingScale = 100 / 43; // clothing images are 100x240, around the 43x103 student
 
 // Original image pixel sizes and points of interest (x and y of top-left of bus image)
 const backgroundOriginalSize = 990;
@@ -420,13 +421,22 @@ function drawStudent(student, x, y, walking, alpha) {
   backgroundCanvas.save();
   backgroundCanvas.globalAlpha = alpha;
 
+  let centerX = x;
   if (student.flip) {
     backgroundCanvas.translate(x, 0);
     backgroundCanvas.scale(-1, 1);
-    backgroundCanvas.drawImage(studentImage, -studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
-  } else {
-    backgroundCanvas.drawImage(studentImage, x - studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
+    centerX = 0;
   }
+
+  backgroundCanvas.drawImage(studentImage, centerX - studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
+
+  // Clothing overlays (from holiday events) are the size of the student times studentClothingScale,
+  // attached by their centers, so they line up perfectly (and flip along with the student)
+  const clothingWidth = studentSize.width * studentClothingScale;
+  const clothingHeight = studentSize.height * studentClothingScale;
+  getStudentClothing(student).forEach((clothing) => {
+    backgroundCanvas.drawImage(clothing, centerX - clothingWidth / 2, drawY - studentSize.height / 2 - clothingHeight / 2, clothingWidth, clothingHeight);
+  });
 
   backgroundCanvas.restore();
 }
@@ -654,6 +664,8 @@ function showTestBusses() {
     return; // skip this cycle's busses
   }
 
+  startHolidayBusCycle();
+
   const boardLimit = () => (window.crowdedMode === true ? 2 + Math.floor(Math.random() * 3) : undefined);
 
   // A bus that goes to the stop and when it arrives, after 2 seconds, it goes to the central destination
@@ -709,6 +721,15 @@ function getEventScene() {
     get drawArea() { return drawArea; },
     get pointsOfInterest() { return pointsOfInterest; },
     get darkness() { return currentDarkness; }, // 0 = daylight, 1 = night
+    get nightFilter() { return nightFilter; }, // canvas filter that darkens sprites at night
+    get busSize() { return busSize; },
+    get scale() { return drawArea.width / backgroundOriginalSize; }, // canvas pixels per background pixel
+    toCanvas(point) { // background pixels (the 990x990 of background.png) to canvas pixels
+      return {
+        x: drawArea.x + point.x * drawArea.width / backgroundOriginalSize,
+        y: drawArea.y + point.y * drawArea.height / backgroundOriginalSize,
+      };
+    },
   };
 }
 
@@ -717,6 +738,7 @@ function draw() {
   updateTimeOfDay();
   backgroundCanvas.filter = nightFilter;
   drawBackground();
+  drawHolidayGround(getEventScene(), new Date().getTime());
 
   if (debugHelpFindBusPositions) {
     // Draw a bus at the cursor position and show the x, y coordinates based on the original image size
@@ -799,6 +821,8 @@ function draw() {
   // routeA students draw under the bus, routeB students draw over it
   drawStudentsForRoute('routeA');
   drawBuses();
+  drawHolidayVehicles(getEventScene(), now);
+  drawHolidayFrontGround(getEventScene());
   drawStudentsForRoute('routeB');
 
   drawStopSign();
