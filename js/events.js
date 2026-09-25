@@ -6,6 +6,7 @@
 **   registerHolidayEvent({
 **     id: 'my-event',
 **     isActive(time) { return time.month === 2 && time.day === 14; },
+**     isFallback: true,           // optional: no isActive needed, runs only while no non-fallback event is active
 **     activate(scene) { },        // optional: the event just became active (create DOM, reset state)
 **     deactivate(scene) { },      // optional: the event just ended (clean up whatever activate() made)
 **     tick(time, scene) { },      // optional: about once a second while active
@@ -57,8 +58,11 @@ function updateHolidayEvents(scene, date) {
 
   const time = getAmsterdamTime(date);
 
+  // Fallback events only run while nothing else does, so a holiday can replace the default scenery
+  const anyRegularActive = holidayEvents.some((event) => !event.isFallback && event.isActive(time));
+
   holidayEvents.forEach((event) => {
-    const active = event.isActive(time);
+    const active = event.isFallback ? !anyRegularActive : event.isActive(time);
     const wasActive = activeHolidayEvents.has(event);
 
     if (active && !wasActive) {

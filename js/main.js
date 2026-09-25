@@ -201,46 +201,6 @@ const studentImage = new Image();
 studentImage.src = 'assets/student.png';
 const studentImageAspect = 43 / 103; // width / height of the source image
 
-const balloonImage = new Image();
-balloonImage.src = 'assets/balloon.png';
-
-// A balloon occasionally drifts across the whole screen, above everything else
-let balloon = null;
-let nextBalloonTime = Date.now() + randomBetween(5000, 15000);
-
-function drawBalloon(now) {
-  if (!balloon) {
-    if (now < nextBalloonTime || !balloonImage.complete || !balloonImage.naturalWidth) {
-      return;
-    }
-
-    const height = backgroundCanvasElement.height * randomBetween(0.3, 0.4);
-    const width = height * balloonImage.naturalWidth / balloonImage.naturalHeight;
-    const leftToRight = Math.random() < 0.5;
-    balloon = {
-      startTime: now,
-      duration: randomBetween(25000, 40000),
-      width,
-      height,
-      fromX: leftToRight ? -width : backgroundCanvasElement.width + width,
-      toX: leftToRight ? backgroundCanvasElement.width + width : -width,
-      baseY: backgroundCanvasElement.height * randomBetween(0.1, 0.5),
-      bobPhase: Math.random() * Math.PI * 2,
-    };
-  }
-
-  const progress = (now - balloon.startTime) / balloon.duration;
-  if (progress >= 1) {
-    balloon = null;
-    nextBalloonTime = now + randomBetween(30000, 90000);
-    return;
-  }
-
-  const x = balloon.fromX + (balloon.toX - balloon.fromX) * progress;
-  const y = balloon.baseY + Math.sin(now / 1200 + balloon.bobPhase) * balloon.height * 0.15;
-  backgroundCanvas.drawImage(balloonImage, x - balloon.width / 2, y - balloon.height / 2, balloon.width, balloon.height);
-}
-
 // Original image pixel sizes and points of interest (x and y of top-left of bus image)
 const backgroundOriginalSize = 990;
 const busOriginalSize = 350;
@@ -842,7 +802,6 @@ function draw() {
   drawStudentsForRoute('routeB');
 
   drawStopSign();
-  drawBalloon(now);
 
   // Holiday events get the finished scene to update and draw on top of
   const eventScene = getEventScene();
