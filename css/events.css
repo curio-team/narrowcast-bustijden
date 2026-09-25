@@ -1,0 +1,57 @@
+/* Styles for the holiday events in js/events/, one section per event */
+
+/* Oud & Nieuw */
+.event-new-year-banner {
+  position: fixed;
+  left: 3rem;
+  bottom: 6rem;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+  font-family: 'Montserrat', sans-serif;
+  text-transform: uppercase;
+  animation: event-new-year-pulse 3s ease-in-out infinite;
+}
+
+.event-new-year-greeting {
+  font-size: 1.5rem;
+  font-weight: bold;
+  letter-spacing: 0.2em;
+  color: #fff3c4;
+  text-shadow: 0 0 12px rgba(255, 200, 80, 0.8), 0 1px 3px rgba(40, 10, 60, 0.8); /* dark edge keeps it readable on the daytime sky */
+}
+
+.event-new-year-year {
+  font-size: 7rem;
+  line-height: 1;
+  font-weight: 800;
+  background: linear-gradient(to bottom, #fff7d6, #ffc94a 55%, #d98a00);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 16px rgba(255, 190, 60, 0.7)) drop-shadow(0 2px 2px rgba(0, 0, 0, 0.4));
+}
+
+@keyframes event-new-year-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+@media (orientation: portrait) {
+  .event-new-year-banner {
+    left: auto;
+    right: 1rem;
+    top: 0.75rem;
+    bottom: auto;
+  }
+
+  .event-new-year-greeting {
+    font-size: 0.9rem;
+  }
+
+  .event-new-year-year {
+    font-size: 3.5rem;
+  }
+}
