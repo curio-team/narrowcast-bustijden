@@ -14,6 +14,10 @@ let currentBusAnimationId = 0;
 let stopAreaCode = 'BdOud';
 const busAnimationData = [];
 
+// Settles once the first API response was handled, so the first bus cycle knows about crowdedMode
+let resolveFirstDataLoad;
+const firstDataLoad = new Promise((resolve) => { resolveFirstDataLoad = resolve; });
+
 // Animation constants
 const BUS_TRAVEL_DURATION = 3000;
 const FADE_TIME = BUS_TRAVEL_DURATION * .5;
@@ -138,7 +142,8 @@ Vue.createApp({
         })
         .catch((err) => {
           this.error = err.message ?? 'Verbindingsfout';
-        });
+        })
+        .finally(() => resolveFirstDataLoad());
     }
   },
   methods: {
@@ -708,8 +713,12 @@ function showTestBusses() {
     }
   );
 }
-showTestBusses();
-setInterval(showTestBusses, 10000);
+// Wait for the API data (max 5s) so crowdedMode is already decided before the first students spawn
+Promise.race([firstDataLoad, new Promise((resolve) => setTimeout(resolve, 5000))])
+  .then(() => {
+    showTestBusses();
+    setInterval(showTestBusses, 10000);
+  });
 
 // What holiday events (js/events/*.js) get to work with. Live getters, since drawArea etc. are replaced on resize.
 function getEventScene() {
