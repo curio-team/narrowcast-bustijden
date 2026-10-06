@@ -331,9 +331,11 @@ const amsterdamLongitude = 4.9;
 // Set window.fakeTime in the console (a Date, timestamp or ISO string like '2026-12-01T23:00:00+01:00') to test other times.
 // On localhost you can also pass it as a query parameter: ?fakeTime=2026-12-31T23:59:30+01:00
 function getNow() {
-  const queryTime = isLocalhost() ? new URLSearchParams(window.location.search).get('fakeTime') : null;
+  // A literal "+" in a query string decodes to a space, so put it back (otherwise +01:00 gives an invalid date)
+  const queryTime = isLocalhost() ? new URLSearchParams(window.location.search).get('fakeTime')?.replace(' ', '+') : null;
   const fakeTime = window.fakeTime || queryTime;
-  return fakeTime ? new Date(fakeTime) : new Date();
+  const date = fakeTime ? new Date(fakeTime) : new Date();
+  return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
 function getSunElevationHours() {
