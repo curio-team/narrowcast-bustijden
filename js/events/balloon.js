@@ -16,7 +16,7 @@
 
     activate() {
       balloon = null;
-      nextBalloonTime = Date.now() + randomBetween(5000, 15000);
+      nextBalloonTime = Date.now() + randomBetween(5000, 40000);
     },
 
     deactivate() {
