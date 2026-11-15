@@ -189,6 +189,7 @@ function drawSnow(dt, count, push, now) {
 
 function weatherFrame(timestamp) {
   weatherFrameId = 0;
+  if (document.hidden) return;
   const weather = getWeather();
   const target = weather.mode === 'none' ? 0 : Math.max(0, Math.min(1, weather.intensity));
 
@@ -227,12 +228,18 @@ function weatherFrame(timestamp) {
 
 // Checked every second: cheap, and it wakes the loop when the weather turns wet
 function startWeatherLoop() {
-  if (!weatherFrameId && (getWeather().mode !== 'none' || shownIntensity > 0)) {
+  if (!document.hidden && !weatherFrameId && (getWeather().mode !== 'none' || shownIntensity > 0)) {
     lastWeatherFrame = 0;
     weatherFrameId = requestAnimationFrame(weatherFrame);
   }
 }
 setInterval(startWeatherLoop, 1000);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    cancelAnimationFrame(weatherFrameId);
+    weatherFrameId = 0;
+  } else startWeatherLoop();
+});
 
 fetchWeather();
 

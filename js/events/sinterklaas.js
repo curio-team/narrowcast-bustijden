@@ -11,20 +11,20 @@ registerHolidayEvent({
 
   clothing: [
     {
-      images: [
-        'assets/sinterklaas/student-hat1.png',
-        'assets/sinterklaas/student-hat2.png',
-        'assets/sinterklaas/student-hat3.png',
+      models: [
+        'sinterklaas/student-hat1',
+        'sinterklaas/student-hat2',
+        'sinterklaas/student-hat3',
       ],
       chance: 0.5,
     },
   ],
 
   props: [
-    { image: 'assets/sinterklaas/sinterklaas.png', height: 120, at: { x: 140, y: 590 } },
-    { image: 'assets/sinterklaas/present1.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present2.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present3.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present4.png', height: 100, count: [1, 3] },
+    { model: 'sinterklaas/sinterklaas', height: 120, at: { x: 140, y: 590 } },
+    { model: 'sinterklaas/present1', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present2', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present3', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present4', height: 40, count: [1, 3] },
   ],
 });

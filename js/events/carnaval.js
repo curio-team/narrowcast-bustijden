@@ -10,9 +10,9 @@ registerHolidayEvent({
   },
 
   clothing: [
-    { images: ['assets/carnaval/student-kiel1.png'], chance: 0.4 },
-    { images: ['assets/carnaval/student-hat1.png'], chance: 0.5 },
+    { models: ['carnaval/student-kiel1'], chance: 0.4 },
+    { models: ['carnaval/student-hat1'], chance: 0.5 },
   ],
 
-  driveBy: { image: 'assets/carnaval/parade-car.png', width: 250, chance: 0.9 },
+  driveBy: { model: 'carnaval/parade-car', width: 250, chance: 0.9 },
 });

@@ -4,9 +4,6 @@
 ** drifting thing instead).
 */
 (() => {
-  const balloonImage = new Image();
-  balloonImage.src = 'assets/balloon.png';
-
   let balloon = null;
   let nextBalloonTime = 0;
 
@@ -25,12 +22,12 @@
 
     draw(scene, now) {
       if (!balloon) {
-        if (now < nextBalloonTime || !balloonImage.complete || !balloonImage.naturalWidth) {
+        if (now < nextBalloonTime) {
           return;
         }
 
         const height = scene.height * randomBetween(0.3, 0.4);
-        const width = height * balloonImage.naturalWidth / balloonImage.naturalHeight;
+        const width = height * .7;
         const leftToRight = Math.random() < 0.5;
         balloon = {
           startTime: now,
@@ -53,8 +50,7 @@
 
       const x = balloon.fromX + (balloon.toX - balloon.fromX) * progress;
       const y = balloon.baseY + Math.sin(now / 1200 + balloon.bobPhase) * balloon.height * 0.15;
-      scene.ctx.filter = nightFilter; // it flies through the same night as the rest of the scene
-      scene.ctx.drawImage(balloonImage, x - balloon.width / 2, y - balloon.height / 2, balloon.width, balloon.height);
+      scene.models.drawFloating('balloon', x, y, balloon.height);
     },
   });
 })();

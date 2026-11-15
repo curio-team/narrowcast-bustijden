@@ -78,7 +78,11 @@
 <body class="flex items-center justify-center"
       style="background-image: linear-gradient(to bottom right, #b48cbe, #aaeef7)">
   <canvas id="backgroundCanvas"
-          class="fixed w-full h-full"></canvas>
+          aria-hidden="true"
+          class="fixed w-full h-full pointer-events-none"></canvas>
+  <canvas id="eventCanvas"
+          aria-hidden="true"
+          class="fixed w-full h-full pointer-events-none"></canvas>
 
   <div id="app"
        class="absolute h-full w-full flex flex-col justify-between p-12 pt-0 pb-20">

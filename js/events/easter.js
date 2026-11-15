@@ -9,10 +9,10 @@ registerHolidayEvent({
   },
 
   props: [
-    { image: 'assets/easter/egg.png', height: 100, count: [4, 7] },
-    { image: 'assets/easter/eggs.png', height: 100, count: [2, 3] },
-    { image: 'assets/easter/egg-chick.png', height: 100, count: [1, 2] },
-    { image: 'assets/easter/choco-bunny.png', height: 100, count: [1, 2] },
-    { image: 'assets/easter/bunny.png', height: 200, count: 1 },
+    { model: 'easter/egg', height: 100, count: [4, 7] },
+    { model: 'easter/eggs', height: 100, count: [2, 3] },
+    { model: 'easter/egg-chick', height: 100, count: [1, 2] },
+    { model: 'easter/choco-bunny', height: 100, count: [1, 2] },
+    { model: 'easter/bunny', height: 200, count: 1 },
   ],
 });

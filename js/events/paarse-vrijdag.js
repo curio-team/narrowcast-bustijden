@@ -96,7 +96,7 @@
     },
 
     clothing: [
-      { images: ['assets/paarse-vrijdag/t-shirt.png'], chance: 0.7 },
+      { models: ['paarse-vrijdag/t-shirt'], chance: 0.7 },
     ],
 
     activate() {

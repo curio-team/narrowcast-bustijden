@@ -12,7 +12,7 @@ function isLocalhost() {
 
 let currentBusAnimationId = 0;
 let stopAreaCode = 'BdOud';
-const busAnimationData = [];
+const busAnimationData = new Map();
 
 // Settles once the first API response was handled, so the first bus cycle knows about crowdedMode
 let resolveFirstDataLoad;
@@ -33,7 +33,7 @@ function fadeMode(mode, duration) {
 
 function addBusToAnimationData(direction, from, to, fadeMode, onArrivalCallback) {
   const currentTime = new Date().getTime();
-  busAnimationData[currentBusAnimationId] = {
+  busAnimationData.set(currentBusAnimationId, {
     direction,
     from,
     to,
@@ -41,12 +41,12 @@ function addBusToAnimationData(direction, from, to, fadeMode, onArrivalCallback)
     startTime: currentTime,
     travelDuration: BUS_TRAVEL_DURATION,
     onArrivalCallback
-  };
+  });
   currentBusAnimationId++;
 }
 
 function removeBusFromAnimationData(index) {
-  delete busAnimationData[index];
+  busAnimationData.delete(index);
 }
 
 /*
@@ -183,143 +183,60 @@ Vue.createApp({
 /*
 ** Background canvas bus animation
 */
-const busToCentral = new Image();
-busToCentral.src = 'assets/bus-to-central.png';
-
-const busToRoute = new Image();
-busToRoute.src = 'assets/bus-to-route.png';
-
-const busToCentralLights = new Image();
-busToCentralLights.src = 'assets/bus-to-central-lights.png';
-
-const busToRouteLights = new Image();
-busToRouteLights.src = 'assets/bus-to-route-lights.png';
-const lightsOriginalSize = 1000; // drawn at the same scale as the bus (busOriginalSize)
-
-const background = new Image();
-background.src = 'assets/background.png';
-
-const stopSignRoute = new Image();
-stopSignRoute.src = 'assets/stop.png';
-
-const studentImage = new Image();
-studentImage.src = 'assets/student.png';
-const studentImageAspect = 43 / 103; // width / height of the source image
-const studentClothingScale = 100 / 43; // clothing images are 100x240, around the 43x103 student
-
-// Original image pixel sizes and points of interest (x and y of top-left of bus image)
+// Route labels select opposing orientations of the same procedural model.
+const busToCentral = 'central';
+const busToRoute = 'route';
 const backgroundOriginalSize = 990;
-const busOriginalSize = 350;
-const stopSignOriginalSize = 194;
-const studentOriginalHeight = 70; // students are drawn much smaller than the bus/stop sign
 const backgroundOriginalPointsOfInterest = {
   routeA: {
     spawn: { x: 1259, y: -259 },
     stop: { x: 268, y: 314 },
-    destination: { x: -800, y: 900 },
+    destination: { x: -800, y: 314 + 1068 / Math.sqrt(3) },
   },
   routeB: {
-    spawn: { x: -812, y: 1118 },
+    spawn: { x: -812, y: 446 + 1300 / Math.sqrt(3) },
     stop: { x: 488, y: 446 },
-    destination: { x: 1475, y: -100 },
+    destination: { x: 1475, y: 446 - 987 / Math.sqrt(3) },
   },
   stopSignRoute: { x: 785, y: 515 },
-}
+};
 
-// Scaled bus size and points of interest
-let busSize = busOriginalSize;
-let stopSignSize = stopSignOriginalSize;
-let studentSize = { width: 0, height: 0 };
+// Simulation always uses layout coordinates, independent of resolution and resizing.
+const pointsOfInterest = backgroundOriginalPointsOfInterest;
+const busSize = { width: 350, height: 350 };
 let drawArea = {};
-let pointsOfInterest = {};
-
-// Get the canvas and its context
+let scene3d = null;
 const backgroundCanvasElement = document.getElementById('backgroundCanvas');
-const backgroundCanvas = backgroundCanvasElement.getContext('2d');
-const scaleAnimation = 0.4;
+const eventCanvasElement = document.getElementById('eventCanvas');
+const backgroundCanvas = eventCanvasElement.getContext('2d');
 
-const resizeCanvas = () => {
-  backgroundCanvasElement.width = window.innerWidth;
-  backgroundCanvasElement.height = window.innerHeight;
-
-  const smallestDimension = Math.min(window.innerWidth * scaleAnimation, window.innerHeight * scaleAnimation);
-  drawArea = {
-    x: window.innerWidth * .5 - smallestDimension * .5,
-    y: window.innerHeight * .5 - smallestDimension * .5,
-    width: smallestDimension,
-    height: smallestDimension
-  };
-
-  // Scale the bus and points of interest to the new canvas size
-  const scalePoint = (point) => {
-    return {
-      x: drawArea.x + drawArea.width * point.x / backgroundOriginalSize,
-      y: drawArea.y + drawArea.height * point.y / backgroundOriginalSize
-    }
-  }
-
-  busSize = {
-    width: smallestDimension * busOriginalSize / backgroundOriginalSize,
-    height: smallestDimension * busOriginalSize / backgroundOriginalSize
-  };
-
-  stopSignSize = {
-    width: smallestDimension * stopSignOriginalSize / backgroundOriginalSize,
-    height: smallestDimension * stopSignOriginalSize / backgroundOriginalSize
-  }
-
-  studentSize.height = smallestDimension * studentOriginalHeight / backgroundOriginalSize;
-  studentSize.width = studentSize.height * studentImageAspect;
-
-  pointsOfInterest = {
-    routeA: {
-      spawn: scalePoint(backgroundOriginalPointsOfInterest.routeA.spawn),
-      stop: scalePoint(backgroundOriginalPointsOfInterest.routeA.stop),
-      destination: scalePoint(backgroundOriginalPointsOfInterest.routeA.destination)
-    },
-    routeB: {
-      spawn: scalePoint(backgroundOriginalPointsOfInterest.routeB.spawn),
-      stop: scalePoint(backgroundOriginalPointsOfInterest.routeB.stop),
-      destination: scalePoint(backgroundOriginalPointsOfInterest.routeB.destination)
-    },
-    stopSignRoute: scalePoint(backgroundOriginalPointsOfInterest.stopSignRoute)
-  };
+function resizeCanvas() {
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const effectRatio = Math.min(1, Math.sqrt(1920 * 1080 / (width * height)));
+  eventCanvasElement.width = Math.round(width * effectRatio);
+  eventCanvasElement.height = Math.round(height * effectRatio);
+  backgroundCanvas.setTransform(effectRatio, 0, 0, effectRatio, 0, 0);
+  const size = Math.min(width, height) * .4;
+  drawArea = { x: (width - size) / 2, y: (height - size) / 2, width: size, height: size };
+  scene3d?.resize(width, height);
 }
-
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-/*
-** Drawing functions
-*/
-
-// Draws the bus at the given position, optionally "running" (bouncing up and down like its engine is running)
-function drawBus(bus, x, y, running) {
-  if (running) {
-    y += Math.sin(Date.now() / 25) * 1;
-  }
-
-  backgroundCanvas.drawImage(bus, x, y, busSize.width, busSize.height);
-
-  // Headlight overlay is 1000x1000 for a 350x350 bus, centered on the bus
-  const lights = bus === busToCentral ? busToCentralLights : bus === busToRoute ? busToRouteLights : null;
-  if (lights && currentDarkness > 0 && lights.complete && lights.naturalWidth) {
-    const lightsWidth = busSize.width * lightsOriginalSize / busOriginalSize;
-    const lightsHeight = busSize.height * lightsOriginalSize / busOriginalSize;
-    const previousAlpha = backgroundCanvas.globalAlpha;
-    backgroundCanvas.globalAlpha = previousAlpha * currentDarkness;
-    backgroundCanvas.filter = 'none'; // headlights glow, they shouldn't be darkened
-    backgroundCanvas.drawImage(
-      lights,
-      x + busSize.width / 2 - lightsWidth / 2,
-      y + busSize.height / 2 - lightsHeight / 2,
-      lightsWidth,
-      lightsHeight
-    );
-    backgroundCanvas.globalAlpha = previousAlpha;
-    backgroundCanvas.filter = nightFilter;
-  }
-}
+import('./scene3d.js').then(({ IsometricScene }) => {
+  scene3d = new IsometricScene(backgroundCanvasElement);
+  // Inspect bounded draw calls, triangles and GPU resources on a kiosk or in browser devtools.
+  window.scene3d = scene3d;
+  startSceneLoop();
+}).catch((error) => {
+  console.error('Could not start procedural 3D scenery:', error);
+  const notice = document.createElement('p');
+  notice.setAttribute('role', 'status');
+  notice.style.cssText = 'position:fixed;bottom:0;left:0;font:12px sans-serif;padding:4px;';
+  notice.textContent = '3D-weergave niet beschikbaar. Vertrektijden blijven zichtbaar.';
+  document.body.appendChild(notice);
+});
 
 /*
 ** Time of day
@@ -401,83 +318,24 @@ function updateTimeOfDay() {
     root.setProperty('--sky-border', `rgb(${mixColor([229, 231, 235], [60, 62, 100], d)})`);
   }
 
-  // Darken and cool down the sprites (canvas filters aren't supported everywhere, then they stay bright)
+  // Available to custom canvas effects; 3D models use the scene's day/night lighting.
   nightFilter = currentDarkness > 0.01
     ? `brightness(${1 - 0.5 * currentDarkness}) saturate(${1 - 0.25 * currentDarkness}) hue-rotate(${12 * currentDarkness}deg)`
     : 'none';
 }
 let nightFilter = 'none';
 
-function drawBackground() {
-  backgroundCanvas.drawImage(background, drawArea.x, drawArea.y, drawArea.width, drawArea.height);
-}
-
-function drawStopSign() {
-  backgroundCanvas.drawImage(stopSignRoute, pointsOfInterest.stopSignRoute.x, pointsOfInterest.stopSignRoute.y, stopSignSize.width, stopSignSize.height);
-}
-
-// Draws a student standing on their feet at (x, y), optionally bouncing like they're walking
-function drawStudent(student, x, y, walking, alpha) {
-  let drawY = y;
-
-  if (walking) {
-    const bounce = Math.abs(Math.sin((Date.now() + student.bouncePhase) / student.bounceSpeed));
-    drawY -= bounce * studentSize.height * 0.18;
-  }
-
-  backgroundCanvas.save();
-  backgroundCanvas.globalAlpha = alpha;
-
-  let centerX = x;
-  if (student.flip) {
-    backgroundCanvas.translate(x, 0);
-    backgroundCanvas.scale(-1, 1);
-    centerX = 0;
-  }
-
-  backgroundCanvas.drawImage(studentImage, centerX - studentSize.width / 2, drawY - studentSize.height, studentSize.width, studentSize.height);
-
-  // Clothing overlays (from holiday events) are the size of the student times studentClothingScale,
-  // attached by their centers, so they line up perfectly (and flip along with the student)
-  const clothingWidth = studentSize.width * studentClothingScale;
-  const clothingHeight = studentSize.height * studentClothingScale;
-  getStudentClothing(student).forEach((clothing) => {
-    backgroundCanvas.drawImage(clothing, centerX - clothingWidth / 2, drawY - studentSize.height / 2 - clothingHeight / 2, clothingWidth, clothingHeight);
-  });
-
-  backgroundCanvas.restore();
-}
-
-let debugHelpFindBusPositions = false;
-let mouseX = 0;
-let mouseY = 0;
-
-// If we're on localhost and the user presses d, we toggle the debug mode to help find the correct bus positions
-if (isLocalhost()) {
-  window.addEventListener('mousemove', (event) => {
-    mouseX = event.clientX;
-    mouseY = event.clientY;
-  });
-
-  window.addEventListener('keydown', (event) => {
-    if (event.key === 'd') {
-      debugHelpFindBusPositions = !debugHelpFindBusPositions;
-    }
-  });
-}
-
 // Students walk up to a stop before the bus arrives, wait, then board.
 let currentStudentAnimationId = 0;
-const studentAnimationData = [];
+const studentAnimationData = new Map();
 
 function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
-// Scales an offset in the original 990x990 space into canvas pixels (no drawArea.x/y, it's a delta)
+// Layout offsets stay in the same 990-unit simulation space on every display.
 function scaleOriginalOffset(offset) {
-  const scale = drawArea.width / backgroundOriginalSize;
-  return { x: offset.x * scale, y: offset.y * scale };
+  return { x: offset.x, y: offset.y };
 }
 
 // Pixel offsets from each stop (same coord space as backgroundOriginalPointsOfInterest):
@@ -599,7 +457,7 @@ function spawnStudentsForStop(routeKey, count) {
       y: geo.anchor.y - geo.dir.y * roughDistance + geo.perp.y * perpOffset
     };
 
-    studentAnimationData[currentStudentAnimationId] = {
+    studentAnimationData.set(currentStudentAnimationId, {
       route: routeKey,
       seq: studentSequenceCounter++,
       gapToPrev,
@@ -615,7 +473,7 @@ function spawnStudentsForStop(routeKey, count) {
       bouncePhase: randomBetween(0, Math.PI * 2),
       bounceSpeed: randomBetween(160, 220),
       flip: Math.random() < 0.5
-    };
+    });
     currentStudentAnimationId++;
   }
 
@@ -649,7 +507,7 @@ function boardStudentsAtStop(routeKey, limit) {
 }
 
 function removeStudentFromAnimationData(index) {
-  delete studentAnimationData[index];
+  studentAnimationData.delete(index);
 }
 
 const CROWDED_BUS_EVERY_N_CYCLES = 4; // in crowdedMode, busses only show up 1 cycle in N
@@ -727,14 +585,15 @@ function getEventScene() {
   return {
     canvas: backgroundCanvasElement,
     ctx: backgroundCanvas,
-    get width() { return backgroundCanvasElement.width; },
-    get height() { return backgroundCanvasElement.height; },
+    get models() { return scene3d; },
+    get width() { return window.innerWidth; },
+    get height() { return window.innerHeight; },
     get drawArea() { return drawArea; },
     get pointsOfInterest() { return pointsOfInterest; },
     get darkness() { return currentDarkness; }, // 0 = daylight, 1 = night
     get nightFilter() { return nightFilter; }, // canvas filter that darkens sprites at night
     get busSize() { return busSize; },
-    get scale() { return drawArea.width / backgroundOriginalSize; }, // canvas pixels per background pixel
+    get scale() { return 1; }, // world simulation uses original layout units
     toCanvas(point) { // background pixels (the 990x990 of background.png) to canvas pixels
       return {
         x: drawArea.x + point.x * drawArea.width / backgroundOriginalSize,
@@ -744,106 +603,76 @@ function getEventScene() {
   };
 }
 
-function draw() {
+const eventScene = getEventScene();
+const SCENE_MAX_FPS = 30;
+let sceneFrameId = 0;
+let lastSceneFrame = 0;
+let lastTimeOfDayUpdate = 0;
+
+function draw(timestamp) {
+  sceneFrameId = 0;
+  if (document.hidden || !scene3d) return;
+  sceneFrameId = requestAnimationFrame(draw);
+  if (timestamp - lastSceneFrame < 1000 / SCENE_MAX_FPS - 1) return;
+  lastSceneFrame = timestamp - (timestamp - lastSceneFrame) % (1000 / SCENE_MAX_FPS);
+  const now = Date.now();
+  if (now - lastTimeOfDayUpdate >= 1000) {
+    updateTimeOfDay();
+    lastTimeOfDayUpdate = now;
+  }
   backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  updateTimeOfDay();
-  backgroundCanvas.filter = nightFilter;
-  drawBackground();
-  drawHolidayGround(getEventScene(), new Date().getTime());
+  scene3d.begin(currentDarkness);
+  updateHolidayEvents(eventScene, getNow());
+  drawHolidayGround(eventScene, now);
 
-  if (debugHelpFindBusPositions) {
-    // Draw a bus at the cursor position and show the x, y coordinates based on the original image size
-    // This way we can determine the correct points of interest for the bus
-    const x = (mouseX - drawArea.x) * backgroundOriginalSize / drawArea.width;
-    const y = (mouseY - drawArea.y) * backgroundOriginalSize / drawArea.height;
-    console.log(x, y);
+  busAnimationData.forEach((bus, index) => {
+    const elapsed = Math.max(0, now - bus.startTime);
+    const progress = Math.min(1, elapsed / bus.travelDuration);
+    let alpha = 1;
+    if (bus.fadeMode?.mode === FADE_IN) alpha = Math.min(1, elapsed / bus.fadeMode.duration);
+    if (bus.fadeMode?.mode === FADE_OUT) alpha = Math.max(0, Math.min(1, (bus.travelDuration - elapsed) / bus.fadeMode.duration));
+    scene3d.drawBus(bus.direction, bus.from.x + (bus.to.x - bus.from.x) * progress,
+      bus.from.y + (bus.to.y - bus.from.y) * progress, progress < 1, alpha, now);
+    if (progress >= 1) {
+      const callback = bus.onArrivalCallback;
+      bus.onArrivalCallback = null;
+      callback?.(bus, index);
+      if (bus.fadeMode?.mode === FADE_OUT) removeBusFromAnimationData(index);
+    }
+  });
 
-    drawBus(busToCentral, mouseX, mouseY, false);
-  }
-
-  const now = new Date().getTime();
-
-  function drawBuses() {
-    busAnimationData.forEach((bus, index) => {
-      const elapsedTime = now - bus.startTime;
-
-      let alpha = 1;
-      let x, y;
-      let progress = elapsedTime / bus.travelDuration;
-
-      if (bus.fadeMode && bus.fadeMode.mode === FADE_IN) {
-        alpha = Math.min(1, elapsedTime / bus.fadeMode.duration);
-      } else if (bus.fadeMode && bus.fadeMode.mode === FADE_OUT) {
-        alpha = Math.max(0, 1 - (elapsedTime + bus.fadeMode.duration - bus.travelDuration) / bus.fadeMode.duration);
-      }
-
-      if (progress < 1) {
-        x = bus.from.x + (bus.to.x - bus.from.x) * progress;
-        y = bus.from.y + (bus.to.y - bus.from.y) * progress;
-      } else {
-        x = bus.to.x;
-        y = bus.to.y;
-      }
-
-      backgroundCanvas.globalAlpha = alpha;
-      drawBus(bus.direction, x, y, progress < 1); // Only bounce if still moving
-      backgroundCanvas.globalAlpha = 1;
-
-      if (progress > 1) {
-        bus.onArrivalCallback?.(bus, index);
-        bus.onArrivalCallback = null;
-      }
-    });
-  }
-
-  function drawStudentsForRoute(routeKey) {
-    studentAnimationData.forEach((student, index) => {
-      if (student.route !== routeKey || now < student.spawnTime) {
+  studentAnimationData.forEach((student, index) => {
+    if (now < student.spawnTime) return;
+    let pos, alpha = 1, walking = false;
+    if (student.boardStartTime !== null && now >= student.boardStartTime) {
+      const progress = Math.min(1, (now - student.boardStartTime) / student.boardDuration);
+      if (progress >= 1) {
+        removeStudentFromAnimationData(index);
         return;
       }
-
-      let x, y, alpha, walking;
-
-      if (student.boardStartTime !== null && now >= student.boardStartTime) {
-        const progress = Math.min(1, (now - student.boardStartTime) / student.boardDuration);
-
-        x = student.boardPos.x;
-        y = student.boardPos.y;
-        alpha = 1 - progress;
-        walking = false;
-
-        if (progress >= 1) {
-          removeStudentFromAnimationData(index);
-          return;
-        }
-      } else {
-        const pos = getStudentPos(student, now);
-
-        x = pos.x;
-        y = pos.y;
-        alpha = 1;
-        walking = now < student.moveStartTime + student.moveDuration;
-      }
-
-      drawStudent(student, x, y, walking, alpha);
-    });
-  }
-
-  // routeA students draw under the bus, routeB students draw over it
-  drawStudentsForRoute('routeA');
-  drawBuses();
-  drawHolidayVehicles(getEventScene(), now);
-  drawHolidayFrontGround(getEventScene());
-  drawStudentsForRoute('routeB');
-
-  drawStopSign();
-
-  // Holiday events get the finished scene to update and draw on top of
-  const eventScene = getEventScene();
-  updateHolidayEvents(eventScene, getNow());
+      pos = student.boardPos;
+      alpha = 1 - progress;
+    } else {
+      pos = getStudentPos(student, now);
+      walking = now < student.moveStartTime + student.moveDuration;
+    }
+    scene3d.drawStudent(student, pos.x, pos.y, walking, alpha, getStudentClothing(student), now);
+  });
+  drawHolidayVehicles(eventScene, now);
+  drawHolidayFrontGround(eventScene);
   drawHolidayEvents(eventScene, now);
-
-  requestAnimationFrame(draw);
+  scene3d.render();
 }
 
-draw();
+function startSceneLoop() {
+  if (!sceneFrameId && scene3d && !document.hidden) {
+    lastSceneFrame = 0;
+    sceneFrameId = requestAnimationFrame(draw);
+  }
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    cancelAnimationFrame(sceneFrameId);
+    sceneFrameId = 0;
+  } else startSceneLoop();
+});
