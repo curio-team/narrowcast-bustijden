@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="nl">
 
 <head>
   <meta charset="UTF-8">
@@ -11,179 +11,123 @@
         content="upgrade-insecure-requests">
 
   <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            curioPrimary: '#69197c',
-            curioSecondary: '#56ddef',
-          }
-        }
-      }
-    }
-  </script>
 
   <link rel="stylesheet"
         href="css/events.css">
 
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Libre+Baskerville&family=Montserrat&family=Open+Sans&display=swap');
-
-    body,
-    html {
-      background-color: white;
-      height: 100%;
-      width: 100%;
-    }
-
-    /* These colors are blended between day and night by updateTimeOfDay() */
-    :root {
-      --sky-header-bg: rgba(86, 221, 239, 0.92);
-      --sky-title: #69197c;
-      --sky-panel-bg: rgba(255, 255, 255, 0.91);
-      --sky-text: #000;
-      --sky-border: #e5e7eb;
-    }
-
-    #app {
-      color: var(--sky-text);
-    }
-
-    #app .border-b {
-      border-color: var(--sky-border);
-    }
-
-    .sky-header {
-      background-color: var(--sky-header-bg);
-      color: var(--sky-title);
-    }
-
-    .sky-panel {
-      background-color: var(--sky-panel-bg);
-    }
-
-    .sky-title {
-      color: var(--sky-title);
-    }
-
-    h1.sky-title {
-      text-shadow: 0 0 12px var(--sky-panel-bg), 0 0 4px var(--sky-panel-bg);
-    }
-
-    h2 {
-      font-family: 'Arial', sans-serif;
-      font-weight: bolder;
-    }
-  </style>
+  <link rel="stylesheet"
+        href="css/boards.css">
 </head>
 
-<body class="flex items-center justify-center"
-      style="background-image: linear-gradient(to bottom right, #b48cbe, #aaeef7)">
+<body style="background-image: linear-gradient(to bottom right, #b48cbe, #aaeef7)">
   <canvas id="backgroundCanvas"
-          aria-hidden="true"
-          class="fixed w-full h-full pointer-events-none"></canvas>
+          aria-hidden="true"></canvas>
   <canvas id="eventCanvas"
-          aria-hidden="true"
-          class="fixed w-full h-full pointer-events-none"></canvas>
+          aria-hidden="true"></canvas>
 
-  <div id="app"
-       class="absolute h-full w-full flex flex-col justify-between p-12 pt-0 pb-20">
+  <main id="app"
+        v-cloak>
     {{ getData }}
 
     <div v-if="error"
-         class="absolute inset-0 flex items-center justify-center">
-      <div class="bg-white/80 rounded-xl shadow-lg p-10 text-center max-w-lg">
-        <p class="text-3xl font-bold text-red-600 mb-4">Fout bij laden</p>
-        <p class="text-xl text-curioPrimary font-mono break-all">{{ error }}</p>
+         class="error-state"
+         role="alert">
+      <div class="error-card">
+        <p class="error-heading">Fout bij laden</p>
+        <p>{{ error }}</p>
       </div>
     </div>
 
-    <div v-show="!error">
-      <h1 class="p-8 font-bold text-4xl text-center sky-title">Bustijden</h1>
-      <div class="routeA sky-panel rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl sky-header text-center font-bold uppercase p-3">
-        </h2>
+    <header v-show="!error"
+            class="stop-sign">
+      <span class="stop-icon"
+            aria-hidden="true">
+        <svg viewBox="0 0 50 50"
+             fill="none"
+             stroke="currentColor"
+             stroke-width="3"
+             stroke-linecap="round"
+             stroke-linejoin="round">
+          <path d="M12 0C5.4375 0 3 2.167969 3 8L3 41C3 42.359375 3.398438 43.339844 4 44.0625L4 47C4 48.652344 5.347656 50 7 50L11 50C12.652344 50 14 48.652344 14 47L14 46L36 46L36 47C36 48.652344 37.347656 50 39 50L43 50C44.652344 50 46 48.652344 46 47L46 44.0625C46.601563 43.339844 47 42.359375 47 41L47 9C47 4.644531 46.460938 0 40 0 Z M 15 4L36 4C36.554688 4 37 4.449219 37 5L37 7C37 7.550781 36.554688 8 36 8L15 8C14.449219 8 14 7.550781 14 7L14 5C14 4.449219 14.449219 4 15 4 Z M 11 11L39 11C41 11 42 12 42 14L42 26C42 28 40.046875 28.9375 39 28.9375L11 29C9 29 8 28 8 26L8 14C8 12 9 11 11 11 Z M 2 12C0.898438 12 0 12.898438 0 14L0 22C0 23.101563 0.898438 24 2 24 Z M 48 12L48 24C49.105469 24 50 23.101563 50 22L50 14C50 12.898438 49.105469 12 48 12 Z M 11.5 34C13.433594 34 15 35.566406 15 37.5C15 39.433594 13.433594 41 11.5 41C9.566406 41 8 39.433594 8 37.5C8 35.566406 9.566406 34 11.5 34 Z M 38.5 34C40.433594 34 42 35.566406 42 37.5C42 39.433594 40.433594 41 38.5 41C36.566406 41 35 39.433594 35 37.5C35 35.566406 36.566406 34 38.5 34Z" />
+        </svg>
+      </span>
+      <h1>
+        <span class="title-prefix">Bustijden</span>
+        <span class="stop-name">{{ stopName || 'Bushalte' }}</span>
+      </h1>
+    </header>
 
-        <table class="table-auto w-full">
-          <thead class="text-lg sky-header uppercase">
-            <tr class="text-left">
-              <th class="py-2 px-4 min-w-48">Vertrektijd</th>
-              <!-- <th class="py-2 px-4">Status</th> -->
-              <th class="py-2 px-4">Eindpunt</th>
-              <th class="py-2 px-4 text-end">Lijn</th>
-            </tr>
-          </thead>
+    <section v-show="!error"
+             class="routeA departure-board">
+      <table aria-label="Vertrektijden eerste rijrichting">
+        <colgroup>
+          <col class="time-column">
+          <col>
+          <col class="line-column">
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">Vertrektijd</th>
+            <th scope="col">Bestemming</th>
+            <th scope="col">Lijn</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="bus in routeA.slice(0,5)">
+            <td>
+              <span class="time-values">
+                <strong class="departure-time"
+                        :class="{ 'time-changed': bus.ExpectedArrivalTime !== bus.TargetArrivalTime }">{{ formatDate(bus.ExpectedArrivalTime) }}</strong>
+                <s v-if="bus.ExpectedArrivalTime !== bus.TargetArrivalTime"
+                   class="planned-time"
+                   aria-label="Geplande vertrektijd">{{ formatDate(bus.TargetArrivalTime) }}</s>
+              </span>
+            </td>
+            <td class="destination">{{bus.DestinationName50}}</td>
+            <td class="line-cell"><span class="line-badge">{{bus.LinePublicNumber}}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
 
-          <tbody class="text-2xl portrait:text-xl">
-            <tr v-for="bus in routeA.slice(0,5)"
-                class="border-b">
-              <td class="py-2 px-4 font-semibold min-w-48"
-                  v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-                {{ formatDate(bus.TargetArrivalTime) }}
-              </td>
-              <td v-else
-                  class="py-2 px-4 font-semibold min-w-48">
-                <div class="inline-block relative">
-                  <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{
-                    formatDate(bus.TargetArrivalTime) }}</span>
-                </div>
-              </td>
-              <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
-              <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <section v-show="!error"
+             class="routeB departure-board">
+      <table aria-label="Vertrektijden tweede rijrichting">
+        <colgroup>
+          <col class="time-column">
+          <col>
+          <col class="line-column">
+        </colgroup>
+        <thead>
+          <tr>
+            <th scope="col">Vertrektijd</th>
+            <th scope="col">Bestemming</th>
+            <th scope="col">Lijn</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-for="bus in routeB.slice(0,5)">
+            <td>
+              <span class="time-values">
+                <strong class="departure-time"
+                        :class="{ 'time-changed': bus.ExpectedArrivalTime !== bus.TargetArrivalTime }">{{ formatDate(bus.ExpectedArrivalTime) }}</strong>
+                <s v-if="bus.ExpectedArrivalTime !== bus.TargetArrivalTime"
+                   class="planned-time"
+                   aria-label="Geplande vertrektijd">{{ formatDate(bus.TargetArrivalTime) }}</s>
+              </span>
+            </td>
+            <td class="destination">{{bus.DestinationName50}}</td>
+            <td class="line-cell"><span class="line-badge">{{bus.LinePublicNumber}}</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+  </main>
 
-    <div v-show="!error"
-         class="flex justify-end">
-      <div class="routeB sky-panel rounded-xl overflow-hidden inline-block w-2/3 portrait:w-10/12 shadow-lg">
-        <h2 class="text-3xl portrait:text-2xl sky-header text-center font-bold uppercase p-3">
-        </h2>
-
-        <table class="table-auto w-full">
-          <thead class="text-lg sky-header uppercase">
-            <tr class="text-left">
-              <th class="py-2 px-4 min-w-48">Vertrektijd</th>
-              <!-- <th class="py-2 px-4">Status</th> -->
-              <th class="py-2 px-4">Eindpunt</th>
-              <th class="py-2 px-4 text-end">Lijn</th>
-            </tr>
-          </thead>
-
-          <tbody class="text-2xl portrait:text-xl">
-            <tr v-for="bus in routeB.slice(0,5)"
-                class="border-b">
-              <td class="py-2 px-4 font-semibold min-w-48"
-                  v-if="bus.ExpectedArrivalTime == bus.TargetArrivalTime">
-                {{ formatDate(bus.TargetArrivalTime) }}
-              </td>
-              <td v-else
-                  class="py-2 px-4 font-semibold min-w-48">
-                <div class="inline-block relative">
-                  <span class="text-red-600">{{ formatDate(bus.ExpectedArrivalTime) }}</span>
-                  <span class="absolute start-full line-through ml-2 opacity-40 text-xs translate-y-1/2">{{
-                    formatDate(bus.TargetArrivalTime) }}</span>
-                </div>
-              </td>
-              <!-- <td class="p-2">{{translate(bus.TripStopStatus)}}</td> -->
-              <td class="p-2">{{bus.DestinationName50}}</td>
-              <td class="py-2 px-4 font-semibold text-end">{{bus.LinePublicNumber}}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <div class="fixed bottom-0 w-full sky-title text-center p-4">
-    <p class="text-xl font-bold inline-block px-4 py-1 rounded-full sky-panel">Let op: Alle vertrektijden zijn vanaf de halte.</p>
-  </div>
+  <footer class="departure-note">
+    <p><span class="note-icon"
+            aria-hidden="true">i</span> Alle vertrektijden zijn vanaf de halte.</p>
+  </footer>
 
   <!-- Holiday events: the registry must load before the event files, and all before main.js -->
   <script src="js/events.js"></script>

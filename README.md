@@ -125,4 +125,4 @@ npm test
 ```
 
 Met `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH` kun je een bestaande Chromium-installatie gebruiken.
-De bestaande Vue- en Tailwind-CDN's moeten bereikbaar zijn tijdens de test.
+De Vue-CDN moet bereikbaar zijn tijdens de test.

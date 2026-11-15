@@ -1,10 +1,5 @@
 /* Styles for the holiday events in js/events/, one section per event */
 
-#backgroundCanvas {
-  top: 0;
-  left: 0;
-}
-
 /* Oud & Nieuw */
 .event-new-year-banner {
   position: fixed;
@@ -80,4 +75,5 @@
   border-radius: 4px;
   background: var(--sky-panel-bg);
   color: inherit;
+  font: inherit;
 }

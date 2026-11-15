@@ -57,6 +57,7 @@ Vue.createApp({
     return {
       routeA: [],
       routeB: [],
+      stopName: '',
       error: null
     }
   },
@@ -96,11 +97,9 @@ Vue.createApp({
             this.error = null;
             const routes = {
               routeA: {
-                element: document.querySelector('.routeA'),
                 id: 72000640,
               },
               routeB: {
-                element: document.querySelector('.routeB'),
                 id: 72000810,
               }
             };
@@ -119,11 +118,7 @@ Vue.createApp({
 
               const routeData = data[stopAreaCode][routes[route].id];
 
-              // routes[route].element.querySelector('h2').innerText = routeData.Stop.TimingPointName;
-              // Since the stop is the same on both sides, let's hide the heading for now and show the common name
-              // as the h1
-              routes[route].element.querySelector('h2').style.display = 'none';
-              document.querySelector('h1').innerText = `Bustijden ${routeData.Stop.TimingPointName}`;
+              this.stopName = routeData.Stop.TimingPointName;
               this[route] = sortPasses(routeData.Passes);
 
               index++;
@@ -338,11 +333,17 @@ function updateTimeOfDay() {
 
     const d = currentDarkness;
     const root = document.documentElement.style;
-    root.setProperty('--sky-header-bg', `rgba(${mixColor([86, 221, 239], [30, 30, 78], d)}, ${0.92 + 0.03 * d})`);
-    root.setProperty('--sky-title', `rgb(${mixColor([105, 25, 124], [222, 208, 255], d)})`);
     root.setProperty('--sky-panel-bg', `rgba(${mixColor([255, 255, 255], [14, 16, 44], d)}, ${0.91 + 0.04 * d})`);
     root.setProperty('--sky-text', `rgb(${mixColor([0, 0, 0], [238, 238, 250], d)})`);
     root.setProperty('--sky-border', `rgb(${mixColor([229, 231, 235], [60, 62, 100], d)})`);
+    root.setProperty('--board-surface', `rgb(${mixColor([255, 254, 249], [25, 25, 46], d)})`);
+    root.setProperty('--board-panel', `rgba(${mixColor([255, 254, 249], [25, 25, 46], d)}, var(--board-opacity))`);
+    root.setProperty('--board-text', `rgb(${mixColor([43, 33, 55], [244, 241, 255], d)})`);
+    root.setProperty('--board-muted', `rgb(${mixColor([115, 104, 123], [180, 175, 204], d)})`);
+    root.setProperty('--board-row', `rgba(${mixColor([247, 245, 249], [30, 29, 53], d)}, var(--board-opacity))`);
+    root.setProperty('--board-featured', `rgba(${mixColor([236, 245, 245], [35, 43, 63], d)}, var(--board-opacity))`);
+    root.setProperty('--board-divider', `rgb(${mixColor([232, 226, 236], [59, 55, 79], d)})`);
+    root.setProperty('--board-change', `rgb(${mixColor([174, 52, 31], [255, 177, 152], d)})`);
   }
 
   // Available to custom canvas effects; 3D models use the scene's day/night lighting.
