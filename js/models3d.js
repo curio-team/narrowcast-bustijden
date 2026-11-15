@@ -588,6 +588,196 @@ function balloon(passengerCount) {
   });
 }
 
+function willysJeep(add) {
+  const olive = '#68734c';
+  const edge = '#7c865b';
+  const darkOlive = '#444e36';
+  const rubber = '#292d2c';
+  const tread = '#353a34';
+  const canvas = '#999376';
+  const stencil = '#eee9d3';
+
+  // Road wheels and the rear spare share narrow military tyres, steel rims and tread blocks.
+  const wheel = (x, y, z, side = 0) => {
+    const rx = side ? 0 : Math.PI / 2;
+    const rz = side ? Math.PI / 2 : 0;
+    const faceX = x + side * .135;
+    const faceZ = z - (side ? 0 : .135);
+    add('cylinder', rubber, x, y, z, .69, .24, .69, rx, 0, rz);
+    add('cylinder', tread, faceX, y, faceZ, .56, .025, .56, rx, 0, rz);
+    add('cylinder', darkOlive, x + side * .153, y, z - (side ? 0 : .153), .41, .025, .41, rx, 0, rz);
+    add('cylinder', edge, x + side * .17, y, z - (side ? 0 : .17), .34, .035, .34, rx, 0, rz);
+    add('cylinder', darkOlive, x + side * .195, y, z - (side ? 0 : .195), .15, .06, .15, rx, 0, rz);
+    for (let n = 0; n < 12; n++) {
+      const a = n / 12 * Math.PI * 2;
+      add('box', tread, x + (side ? 0 : Math.sin(a) * .345), y + Math.cos(a) * .345,
+        z + (side ? Math.sin(a) * .345 : 0), side ? .265 : .12, .065, side ? .12 : .265,
+        side ? a : 0, 0, side ? 0 : -a);
+    }
+    for (let n = 0; n < 5; n++) {
+      const a = n / 5 * Math.PI * 2;
+      add('sphere', '#b0ad8b', x + (side ? side * .196 : Math.sin(a) * .12),
+        y + Math.cos(a) * .12, z + (side ? Math.sin(a) * .12 : -.196), .035, .035, .035);
+    }
+  };
+
+  // Exposed ladder chassis, leaf springs and axles sit below a shallow, open body tub.
+  for (const x of [-.45, .45]) add('box', darkOlive, x, .40, 0, .10, .14, 2.92);
+  for (const z of [-1.02, 1.02]) {
+    add('cylinder', rubber, 0, .37, z, .09, 1.49, .09, 0, 0, Math.PI / 2);
+    add('sphere', darkOlive, 0, .37, z, .27, .23, .24);
+    for (const side of [-1, 1]) {
+      add('box', darkOlive, side * .46, .28, z, .085, .06, .66);
+      wheel(side * .74, .375, z, side);
+    }
+  }
+  add('box', olive, 0, .60, -.02, 1.40, .13, 2.94);
+  add('box', darkOlive, 0, .68, -.49, 1.21, .045, 1.64);
+  add('box', olive, 0, .91, -1.46, 1.44, .60, .09);
+  for (const side of [-1, 1]) {
+    add('box', olive, side * .65, .71, -.11, .13, .16, 1.02);
+    add('box', edge, side * .75, .62, -.10, .29, .065, .74);
+    add('box', olive, side * .54, .87, -1.03, .35, .47, .90);
+    add('box', edge, side * .68, 1.13, -1.03, .33, .065, 1.04);
+    add('box', olive, side * .71, .89, -.54, .09, .48, .14);
+    add('box', olive, side * .71, .88, -1.45, .09, .47, .14);
+    // Flat front wings and their sloping returns leave clear space above the front tyres.
+    add('box', edge, side * .66, .97, 1.04, .39, .065, 1.24);
+    add('box', olive, side * .84, .92, 1.08, .035, .13, 1.15);
+    add('box', olive, side * .66, .83, .30, .39, .065, .43, -.65);
+    add('box', darkOlive, side * .63, .53, 1.61, .10, .11, .37);
+  }
+
+  // The flat bonnet meets an upright nine-slot grille and small, recessed round headlights.
+  add('box', olive, 0, .96, .28, 1.34, .59, .25);
+  add('box', olive, 0, .94, .96, 1.08, .47, 1.15);
+  add('box', edge, 0, 1.205, .94, 1.18, .06, 1.39);
+  add('box', olive, 0, .93, 1.60, 1.20, .55, .075);
+  for (let n = 0; n < 9; n++) {
+    const x = (n - 4) * .084;
+    add('box', '#283129', x, .90, 1.643, .045, .32, .014);
+    for (const y of [.74, 1.06]) add('sphere', '#283129', x, y, 1.644, .045, .055, .018);
+  }
+  for (const side of [-1, 1]) {
+    add('cylinder', darkOlive, side * .48, 1.045, 1.655, .253, .045, .253, Math.PI / 2);
+    add('cylinder', '#dbcf9f', side * .48, 1.045, 1.683, .192, .022, .192, Math.PI / 2);
+    add('sphere', '#f7efd3', side * .48 - .025, 1.08, 1.70, .085, .055, .017);
+    add('box', darkOlive, side * .49, .78, 1.65, .14, .07, .035);
+    add('box', '#c7b18a', side * .49, .77, 1.673, .09, .025, .014);
+    add('box', darkOlive, side * .601, 1.10, .53, .025, .16, .05);
+    add('box', '#adae8d', side * .617, 1.11, .53, .025, .07, .07);
+    add('box', darkOlive, side * .34, 1.242, .36, .19, .025, .055);
+  }
+  add('box', edge, 0, .52, 1.81, 1.80, .16, .13);
+  for (const side of [-1, 1]) add('box', darkOlive, side * .50, .48, 1.90, .09, .13, .10);
+  add('cylinder', darkOlive, .69, 1.10, .85, .14, .23, .14, Math.PI / 2);
+  add('box', '#a4aa88', .69, 1.09, .973, .095, .025, .014);
+
+  // Flat primitive triangles form a five-point hood star without adding a texture or mesh type.
+  for (let n = 0; n < 5; n++) {
+    const a = n / 5 * Math.PI * 2;
+    add('cone', stencil, Math.sin(a) * .244, 1.24, .99 + Math.cos(a) * .244,
+      .171, .253, .007, Math.PI / 2, 0, -a);
+    add('cone', stencil, Math.sin(a) * .05875, 1.24, .99 + Math.cos(a) * .05875,
+      .171, .1175, .007, Math.PI / 2, 0, Math.PI - a);
+  }
+
+  // Separate cushions and seat backs keep the footwells and door openings genuinely open.
+  for (const x of [-.34, .34]) {
+    for (const z of [-.08, -.47]) add('box', darkOlive, x, .74, z, .40, .16, .04);
+    add('box', canvas, x, .84, -.25, .49, .14, .53);
+    add('box', canvas, x, 1.08, -.52, .49, .46, .13, -.12);
+    add('box', '#79785c', x, .91, -.51, .43, .035, .15);
+  }
+  add('box', canvas, 0, 1.10, -1.02, 1.06, .13, .43);
+  add('box', canvas, 0, 1.30, -1.34, 1.08, .36, .13, -.06);
+  add('cylinder', canvas, 0, 1.47, -1.38, .16, 1.15, .16, 0, 0, Math.PI / 2);
+  for (const x of [-.37, .37]) add('cylinder', darkOlive, x, 1.47, -1.38, .175, .055, .175, 0, 0, Math.PI / 2);
+
+  add('box', olive, 0, 1.09, .18, 1.26, .30, .075);
+  for (const [x, diameter] of [[.12, .13], [-.07, .075], [-.23, .075], [.29, .075]]) {
+    add('cylinder', '#b0b29b', x, 1.12, .135, diameter, .02, diameter, Math.PI / 2);
+    add('cylinder', rubber, x, 1.12, .12, diameter * .76, .014, diameter * .76, Math.PI / 2);
+    add('box', stencil, x, 1.13, .109, .012, diameter * .44, .008, 0, 0, -.5);
+  }
+  add('box', darkOlive, -.47, 1.08, .133, .30, .18, .015);
+  add('box', '#a3a58a', -.47, 1.09, .12, .065, .025, .015);
+  add('cylinder', darkOlive, .34, 1.04, .065, .035, .39, .035, -.92);
+  for (let n = 0; n < 12; n++) {
+    const a = n / 12 * Math.PI * 2;
+    add('cylinder', rubber, .34 + Math.cos(a) * .18, 1.16 + Math.sin(a) * .143,
+      -.09 + Math.sin(a) * .109, .028, .10, .028, .65, 0, a);
+  }
+  for (let n = 0; n < 3; n++) {
+    const a = n / 3 * Math.PI * 2;
+    add('cylinder', darkOlive, .34 + Math.cos(a) * .09, 1.16 + Math.sin(a) * .0715,
+      -.09 + Math.sin(a) * .0545, .023, .18, .023, .65, 0, a - Math.PI / 2);
+  }
+  add('sphere', rubber, .34, 1.16, -.09, .065, .065, .065);
+  for (const [x, h] of [[.03, .30], [-.11, .20]]) {
+    add('cylinder', darkOlive, x, .73 + h / 2, -.16, .018, h, .018, -.22);
+    add('sphere', rubber, x, .73 + h, -.16 - h * .11, .06, .06, .06);
+  }
+
+  // Split upright windscreen: open panes with a few glints preserve the view into the cabin.
+  add('box', olive, 0, 1.31, .28, 1.38, .17, .07);
+  for (const x of [-.66, 0, .66]) add('box', edge, x, 1.64, .28, x === 0 ? .035 : .055, .56, .055);
+  add('box', edge, 0, 1.93, .28, 1.38, .055, .06);
+  add('box', darkOlive, 0, 1.39, .28, 1.28, .025, .065);
+  for (const side of [-1, 1]) {
+    add('box', '#c3d8ce', side * .33, 1.70, .29, .022, .31, .018, 0, 0, -.42);
+    add('box', '#c3d8ce', side * .33 + .08, 1.78, .29, .015, .14, .018, 0, 0, -.42);
+    add('box', rubber, side * .32, 1.46, .32, .24, .022, .02, 0, 0, side * .20);
+    add('box', darkOlive, side * .69, 1.29, .28, .07, .18, .10);
+  }
+  add('cylinder', darkOlive, .79, 1.58, .28, .024, .30, .024, 0, 0, -.42);
+  add('sphere', darkOlive, .86, 1.75, .28, .16, .20, .055);
+  add('sphere', '#a8bdb6', .86, 1.75, .315, .12, .16, .025);
+
+  // Rear spare, strapped jerrycan, bumperettes and lamps make it readable from behind.
+  add('box', darkOlive, -.27, 1.02, -1.59, .22, .24, .23);
+  wheel(-.27, 1.03, -1.72);
+  add('box', darkOlive, .48, 1.03, -1.64, .36, .55, .22);
+  add('box', edge, .48, 1.04, -1.76, .28, .44, .025);
+  for (const angle of [-.57, .57]) add('box', olive, .48, 1.04, -1.779, .035, .43, .016, 0, 0, angle);
+  add('box', '#565c3e', .48, 1.04, -1.79, .055, .56, .02);
+  for (const x of [.40, .56]) add('box', darkOlive, x, 1.35, -1.63, .04, .09, .06);
+  add('box', darkOlive, .48, 1.40, -1.63, .20, .04, .06);
+  add('cylinder', edge, .58, 1.32, -1.69, .065, .04, .065);
+  for (const side of [-1, 1]) {
+    add('box', edge, side * .55, .53, -1.62, .33, .15, .20);
+    add('cylinder', darkOlive, side * .61, .79, -1.521, .11, .035, .11, Math.PI / 2);
+    add('cylinder', '#9f3f36', side * .61, .79, -1.545, .075, .02, .075, Math.PI / 2);
+    add('box', darkOlive, side * .77, 1.06, -1.27, .04, .035, .26);
+    for (const z of [-1.38, -1.16]) add('box', darkOlive, side * .745, 1.03, z, .075, .08, .035);
+  }
+  add('box', darkOlive, 0, .43, -1.60, .17, .12, .20);
+  // Pioneer tools secured to the driver's side, beneath the rear grab handle.
+  add('box', '#a08c5e', .79, .91, -.98, .035, .04, .65);
+  add('sphere', '#777e65', .79, .91, -1.34, .045, .17, .25);
+  add('box', '#a08c5e', .79, 1.02, -.97, .035, .035, .63);
+  add('box', '#777e65', .79, 1.02, -.63, .05, .15, .16);
+  for (const z of [-1.15, -.84]) add('box', darkOlive, .815, .97, z, .035, .19, .04);
+
+  // Rear-mounted Dutch tricolours fly outwards, leaving the open cabin and spare visible.
+  for (const side of [-1, 1]) {
+    add('cylinder', darkOlive, side * .74, 1.85, -1.40, .028, 1.43, .028);
+    add('sphere', '#bcb492', side * .74, 2.59, -1.40, .075, .075, .075);
+    for (const y of [1.15, 1.30]) add('cylinder', edge, side * .74, y, -1.40, .085, .055, .085);
+    for (let n = 0; n < 5; n++) {
+      const x0 = side * (.755 + n * .13);
+      const x1 = side * (.755 + (n + 1) * .13);
+      const z0 = -1.40 + Math.sin(n / 5 * Math.PI * 1.7) * .075;
+      const z1 = -1.40 + Math.sin((n + 1) / 5 * Math.PI * 1.7) * .075;
+      const angle = -Math.atan2(z1 - z0, x1 - x0);
+      ['#c23b43', '#f7f3e6', '#2c4d91'].forEach((color, band) => {
+        add('box', color, (x0 + x1) / 2, 2.48 - (band + .5) * .135 - n * .009,
+          (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) + .006, .135, .014, 0, angle);
+      });
+    }
+  }
+}
+
 function paradeFloat(add) {
   const red = '#dc3049';
   const yellow = '#ffd34e';
@@ -725,6 +915,7 @@ function paradeFloat(add) {
 function prop(key) {
   const name = key.split('/').pop();
   if (name === 'parade-car') return model(5.4, paradeFloat);
+  if (name === 'jeep') return model(2.63, willysJeep);
   return model(name === 'flag' ? 2 : name === 'sinterklaas' ? 2.8 : name.includes('bunny') ? 1.5 : 1, (add) => {
     if (name.startsWith('present')) {
       const n = Number(name.slice(-1)) || 1;
@@ -803,11 +994,6 @@ function prop(key) {
         add('cylinder', '#69945b', x, .52, z, .035, .65, .035);
         add('sphere', n % 2 ? '#ecc45b' : '#bd6b9b', x, .89, z, .31, .17, .31);
       }
-    } else if (name === 'jeep') {
-      add('box', '#6f7c56', 0, .55, 0, 1.2, .5, 2.1);
-      add('box', '#6f7c56', 0, .97, -.45, 1.12, .45, .7);
-      add('box', '#b4d6d5', 0, 1.14, .03, 1.06, .5, .06, .15);
-      for (const x of [-.62, .62]) for (const z of [-.7, .7]) add('cylinder', '#30343e', x, .3, z, .54, .14, .54, 0, 0, Math.PI / 2);
     } else {
       // Easter eggs, nests and the hatching chick.
       const chick = name.includes('chick');
