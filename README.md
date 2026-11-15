@@ -1,6 +1,6 @@
 # Narrowcast Bustijden
 
-![Narrowcast Bustijden](./assets/readme-logo.png)
+![Narrowcast Bustijden](./assets/preview.png)
 
 Actuele bustijden voor haltes bij onze school, bedoeld voor de narrowcastschermen.
 
