@@ -1,5 +1,10 @@
 /* Styles for the holiday events in js/events/, one section per event */
 
+#backgroundCanvas {
+  top: 0;
+  left: 0;
+}
+
 /* Oud & Nieuw */
 .event-new-year-banner {
   position: fixed;
@@ -54,4 +59,25 @@
   .event-new-year-year {
     font-size: 3.5rem;
   }
+}
+
+.scene-style-picker {
+  position: fixed;
+  top: 12px;
+  right: 12px;
+  z-index: 100;
+  padding: 8px 12px;
+  border: 1px solid var(--sky-border);
+  border-radius: 8px;
+  background: var(--sky-panel-bg);
+  color: var(--sky-text);
+  font: 14px Arial, sans-serif;
+}
+
+.scene-style-picker select {
+  padding: 4px;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  background: var(--sky-panel-bg);
+  color: inherit;
 }

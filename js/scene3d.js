@@ -1,10 +1,13 @@
 import * as THREE from './vendor/three.module.min.js';
 import { scenery, createEnvironment, createCityDecorations, getModel, MAIN_ROAD_LANES } from './models3d.js';
 import { getLightingProfile, applyLightingShader } from './lighting3d.js';
+import { PixelArtEffect, SCENE_STYLES } from './pixelart3d.js';
+import { SIN_ELEVATION, COS_ELEVATION, GROUND_AXIS_Y } from './projection3d.js';
+
+export { SCENE_STYLES };
 
 const PIXELS_PER_UNIT = 55;
 const SQRT2 = Math.sqrt(2);
-const GROUND_Y = Math.sqrt(2 / 3);
 const MAX_RENDER_PIXELS = 1920 * 1080;
 const MAX_INSTANCES = 16384;
 
@@ -141,14 +144,14 @@ function haloMaterial(uniforms) {
 }
 
 export class IsometricScene {
-  constructor(canvas) {
+  constructor(canvas, style = 'original') {
     this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+    // Count scene and postprocessing draws together.
+    this.renderer.info.autoReset = false;
     this.renderer.setClearColor(0, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.scene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-20, 20, 20, -20, .1, 300);
-    this.camera.position.set(50, 50, 50);
-    this.camera.lookAt(0, 0, 0); // true isometric: 45° azimuth, 35.264° elevation
     this.ambient = new THREE.HemisphereLight('#fff8df', '#80919e', 2.1);
     this.sun = new THREE.DirectionalLight('#fff2d4', 2.4);
     this.sun.position.set(-15, 28, 10);
@@ -186,9 +189,22 @@ export class IsometricScene {
     this.onRestored = () => { this.contextLost = false; };
     canvas.addEventListener('webglcontextlost', this.onLost);
     canvas.addEventListener('webglcontextrestored', this.onRestored);
+    this.style = 'original';
+    this.pixelEffect = null;
+    this.setStyle(style);
     this.resize(window.innerWidth, window.innerHeight);
     this.lastElevation = null;
     this.busLightCount = 0;
+  }
+
+  setStyle(style) {
+    if (!Object.hasOwn(SCENE_STYLES, style)) style = 'original';
+    if (style === this.style) return;
+    this.pixelEffect?.dispose();
+    this.pixelEffect = style === 'original' ? null : new PixelArtEffect(style);
+    this.style = style;
+    this.renderer.domElement.style.imageRendering = this.pixelEffect ? 'pixelated' : 'auto';
+    if (this.width) this.resize(this.width, this.height);
   }
 
   submit(model, root, alpha = 1, batches = this.batches) {
@@ -211,26 +227,48 @@ export class IsometricScene {
   resize(width, height) {
     this.width = width;
     this.height = height;
-    const ratio = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(MAX_RENDER_PIXELS / (width * height)));
-    this.renderer.setPixelRatio(ratio);
-    this.renderer.setSize(width, height, false);
+    if (this.pixelEffect) {
+      const pixelSize = SCENE_STYLES[this.style].pixelSize;
+      this.pixelScale = Math.max(pixelSize, Math.ceil(Math.sqrt(width * height / MAX_RENDER_PIXELS) * pixelSize));
+      // Cover the viewport with whole pixel blocks, including at odd window dimensions.
+      const maxPixels = MAX_RENDER_PIXELS / pixelSize ** 2;
+      while (Math.ceil(width / this.pixelScale) * Math.ceil(height / this.pixelScale) > maxPixels) this.pixelScale++;
+      this.renderer.setPixelRatio(1);
+      const renderWidth = Math.max(1, Math.ceil(width / this.pixelScale));
+      const renderHeight = Math.max(1, Math.ceil(height / this.pixelScale));
+      this.canvasWidth = renderWidth * this.pixelScale;
+      this.canvasHeight = renderHeight * this.pixelScale;
+      this.renderer.setSize(renderWidth, renderHeight, false);
+      this.pixelEffect.resize(renderWidth, renderHeight);
+    } else {
+      this.canvasWidth = width;
+      this.canvasHeight = height;
+      this.pixelScale = 1;
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(MAX_RENDER_PIXELS / (width * height)));
+      this.renderer.setPixelRatio(ratio);
+      this.renderer.setSize(width, height, false);
+    }
+    this.renderer.domElement.style.width = `${this.canvasWidth}px`;
+    this.renderer.domElement.style.height = `${this.canvasHeight}px`;
     // Keep the original 990-unit layout so queues, routes and seasonal anchors share coordinates.
     this.layoutSize = Math.min(width, height) * .4;
     this.layoutX = (width - this.layoutSize) / 2;
     this.layoutY = (height - this.layoutSize) / 2;
     this.pixelsPerWorldUnit = this.layoutSize / 990 * PIXELS_PER_UNIT;
-    const halfW = width / this.pixelsPerWorldUnit / 2;
-    const halfH = height / this.pixelsPerWorldUnit / 2;
+    const halfW = this.canvasWidth / this.pixelsPerWorldUnit / 2;
+    const halfH = this.canvasHeight / this.pixelsPerWorldUnit / 2;
     const centerX = this.layoutX + 495 * this.layoutSize / 990;
     const centerY = this.layoutY + 580 * this.layoutSize / 990;
-    const offsetX = (width / 2 - centerX) / this.pixelsPerWorldUnit;
-    const offsetY = (centerY - height / 2) / this.pixelsPerWorldUnit;
+    const offsetX = (this.canvasWidth / 2 - centerX) / this.pixelsPerWorldUnit;
+    const offsetY = (centerY - this.canvasHeight / 2) / this.pixelsPerWorldUnit;
     // Move only along the viewing axis on tall displays: framing is unchanged, but the near
     // plane cannot cut through the foreground city when the visible ground becomes deeper.
-    const distance = Math.max(50, (halfH + Math.abs(offsetY)) * Math.sqrt(2 / 3) + 20);
-    this.camera.position.set(distance, distance, distance);
+    const groundDepth = (halfH + Math.abs(offsetY)) * COS_ELEVATION / SIN_ELEVATION;
+    const distance = Math.max(90, groundDepth + 35);
+    this.camera.position.set(distance * COS_ELEVATION / SQRT2, distance * SIN_ELEVATION,
+      distance * COS_ELEVATION / SQRT2);
     this.camera.lookAt(0, 0, 0);
-    this.camera.far = Math.max(300, distance * Math.sqrt(3) + halfH * Math.sqrt(2) + 100);
+    this.camera.far = Math.max(300, distance + groundDepth + 100);
     this.camera.left = -halfW + offsetX;
     this.camera.right = halfW + offsetX;
     this.camera.top = halfH + offsetY;
@@ -285,7 +323,7 @@ export class IsometricScene {
     for (const prop of this.cityDecorations) {
       const model = getModel(prop.model);
       this.position.set(prop.x, prop.y, prop.z);
-      this.scale.setScalar(prop.height / (PIXELS_PER_UNIT * GROUND_Y * model.height));
+      this.scale.setScalar(prop.height / (PIXELS_PER_UNIT * COS_ELEVATION * model.height));
       this.quaternion.setFromAxisAngle(this.axis, prop.angle);
       this.root.compose(this.position, this.quaternion, this.scale);
       this.submit(model, this.root, 1, this.staticBatches);
@@ -320,7 +358,7 @@ export class IsometricScene {
   ground(x, y) {
     const u = (x - 495) / PIXELS_PER_UNIT;
     const v = (y - 580) / PIXELS_PER_UNIT;
-    this.position.set(u / SQRT2 + v / GROUND_Y, .23, -u / SQRT2 + v / GROUND_Y);
+    this.position.set(u / SQRT2 + v / (2 * GROUND_AXIS_Y), .23, -u / SQRT2 + v / (2 * GROUND_AXIS_Y));
     return this.position;
   }
 
@@ -332,11 +370,11 @@ export class IsometricScene {
   drawAtPosition(key, height, angle = 0, alpha = 1) {
     if (alpha <= 0) return false;
     const model = getModel(key);
-    const size = height / (PIXELS_PER_UNIT * GROUND_Y * model.height);
+    const size = height / (PIXELS_PER_UNIT * COS_ELEVATION * model.height);
     this.projected.copy(this.position).project(this.camera);
     const margin = Math.max(2, size * model.height * 2) * this.pixelsPerWorldUnit;
-    const sx = (this.projected.x + 1) * this.width / 2;
-    const sy = (1 - this.projected.y) * this.height / 2;
+    const sx = (this.projected.x + 1) * this.canvasWidth / 2;
+    const sy = (1 - this.projected.y) * this.canvasHeight / 2;
     if (sx < -margin || sx > this.width + margin || sy < -margin || sy > this.height + margin) return false;
     this.quaternion.setFromAxisAngle(this.axis, angle);
     this.scale.setScalar(size);
@@ -372,8 +410,8 @@ export class IsometricScene {
   drawFloating(key, x, y, height) {
     // Screen coordinates to a point in the camera's plane. Unlike ground props this can cross the sky.
     const model = getModel(key);
-    this.position.set(x / this.width * 2 - 1, 1 - y / this.height * 2, -.65).unproject(this.camera);
-    const size = height / (this.pixelsPerWorldUnit * GROUND_Y * 3.3);
+    this.position.set(x / this.canvasWidth * 2 - 1, 1 - y / this.canvasHeight * 2, -.65).unproject(this.camera);
+    const size = height / (this.pixelsPerWorldUnit * COS_ELEVATION * 3.3);
     this.quaternion.identity();
     this.scale.setScalar(size);
     this.root.compose(this.position, this.quaternion, this.scale);
@@ -387,12 +425,15 @@ export class IsometricScene {
       const halo = batches.get('light');
       if (halo) halo.mesh.visible = halo.mesh.count > 0 && this.lightingUniforms.uNightLights.value > .001;
     }
-    this.renderer.render(this.scene, this.camera);
+    this.renderer.info.reset();
+    if (this.pixelEffect) this.pixelEffect.render(this.renderer, this.scene, this.camera);
+    else this.renderer.render(this.scene, this.camera);
   }
 
   getStats() {
     return { ...this.renderer.info.render, geometries: this.renderer.info.memory.geometries,
       textures: this.renderer.info.memory.textures, pixelRatio: this.renderer.getPixelRatio(),
+      style: this.style, pixelScale: this.pixelScale, postPasses: this.pixelEffect ? 1 : 0,
       buildings: this.buildingCount,
       blocks: this.environment.blocks.length,
       parks: this.parkCount,
@@ -403,6 +444,7 @@ export class IsometricScene {
   }
 
   dispose() {
+    this.pixelEffect?.dispose();
     this.staticBatches.forEach((batch) => batch.dispose());
     this.batches.forEach((batch) => batch.dispose());
     Object.values(this.geometries).forEach((geometry) => geometry.dispose());

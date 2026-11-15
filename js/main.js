@@ -224,10 +224,30 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-import('./scene3d.js').then(({ IsometricScene }) => {
-  scene3d = new IsometricScene(backgroundCanvasElement);
+import('./scene3d.js').then(({ IsometricScene, SCENE_STYLES }) => {
+  const params = new URLSearchParams(window.location.search);
+  scene3d = new IsometricScene(backgroundCanvasElement, params.get('sceneStyle') || 'original');
   // Inspect bounded draw calls, triangles and GPU resources on a kiosk or in browser devtools.
   window.scene3d = scene3d;
+  if (params.get('compareStyles') === '1') {
+    const label = document.createElement('label');
+    label.className = 'scene-style-picker';
+    label.textContent = 'Scènestijl ';
+    const select = document.createElement('select');
+    select.setAttribute('aria-label', 'Scènestijl');
+    for (const [value, { label: text }] of Object.entries(SCENE_STYLES)) {
+      select.add(new Option(text, value));
+    }
+    select.value = scene3d.style;
+    select.addEventListener('change', () => {
+      scene3d.setStyle(select.value);
+      const url = new URL(window.location.href);
+      url.searchParams.set('sceneStyle', scene3d.style);
+      window.history.replaceState(null, '', url);
+    });
+    label.appendChild(select);
+    document.body.appendChild(label);
+  }
   startSceneLoop();
 }).catch((error) => {
   console.error('Could not start procedural 3D scenery:', error);

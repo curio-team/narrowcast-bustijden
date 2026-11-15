@@ -1,4 +1,5 @@
 import * as THREE from './vendor/three.module.min.js';
+import { COS_ELEVATION, GROUND_AXIS_Y } from './projection3d.js';
 
 // Every model is a small list of transformed, shared primitives. No textures or asset downloads.
 const cache = new Map();
@@ -109,10 +110,10 @@ export function getCityBlock(column, row) {
 
 function visibleCityLot(lot, view, keepFocus = true) {
   const u = (lot.x - lot.z) / Math.sqrt(2);
-  const v = (lot.x + lot.z) / Math.sqrt(6);
+  const v = (lot.x + lot.z) * GROUND_AXIS_Y;
   const radiusU = (lot.width + lot.depth + 1) / (2 * Math.sqrt(2));
-  const radiusV = (lot.width + lot.depth + 1) / (2 * Math.sqrt(6));
-  const top = v - radiusV - (lot.height + 2) * Math.sqrt(2 / 3);
+  const radiusV = (lot.width + lot.depth + 1) * GROUND_AXIS_Y / 2;
+  const top = v - radiusV - (lot.height + 2) * COS_ELEVATION;
   const bottom = v + radiusV;
   if (keepFocus && u + radiusU > -11 && u - radiusU < 11 && bottom > -10 && top < 7) return false;
   return u + radiusU >= view.minU && u - radiusU <= view.maxU && bottom >= view.minV && top <= view.maxV;
@@ -395,13 +396,13 @@ export function createCityDecorations(environment, specs) {
   for (const spec of [...specs].sort((a, b) => Number(!!b.unique) - Number(!!a.unique))) {
     const placements = spec.placements || ['roof', 'park', 'pavement'];
     const candidates = anchors.filter((anchor) => placements.includes(anchor.placement)).map((anchor) => {
-      const radius = spec.unique ? .2 : spec.height / (55 * Math.sqrt(2 / 3)) * .38;
+      const radius = spec.unique ? .2 : spec.height / (55 * COS_ELEVATION) * .38;
       const roof = anchor.lot.roof;
       const y = anchor.placement === 'roof'
         ? roof.base + roof.rise * Math.max(0, 1 - Math.max(0, Math.abs(anchor.x - anchor.lot.x) - radius) / (anchor.lot.width / 2))
         : anchor.placement === 'park' ? .245 : .225;
       const u = (anchor.x - anchor.z) / Math.sqrt(2);
-      const v = (anchor.x + anchor.z) / Math.sqrt(6) - y * Math.sqrt(2 / 3);
+      const v = (anchor.x + anchor.z) * GROUND_AXIS_Y - y * COS_ELEVATION;
       // Prefer a roof to the right of the stop for the single Sinterklaas: visible in both orientations.
       const score = spec.unique ? Math.hypot(u - 17, v + 2) + Math.hypot(anchor.x, anchor.z) * .02
         : decorationHash(`${spec.model}:${anchor.id}`);

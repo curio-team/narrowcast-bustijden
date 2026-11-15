@@ -66,7 +66,7 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   page.on('console', (message) => { if (/THREE.WebGLProgram: Shader Error/.test(message.text())) errors.push(message.text()); });
   page.on('request', (request) => { if (/\/assets\/.*\.png/.test(request.url())) spriteRequests.push(request.url()); });
   await page.route('**/api.open-meteo.com/**', (route) => route.fulfill({ json: { current: { weather_code: 0 } } }));
-  await page.goto(`http://127.0.0.1:${server.address().port}/?fakeTime=2026-11-20T12:00:00%2B01:00`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/?compareStyles=1&fakeTime=2026-11-20T12:00:00%2B01:00`);
   await page.waitForFunction(() => window.scene3d?.getStats().frame > 2 && document.querySelectorAll('tbody tr').length > 0);
   assert.match(await page.locator('h1').textContent(), /Oude Baan/);
   const initial = await page.evaluate(() => ({ stats: scene3d.getStats(),
@@ -107,7 +107,15 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
         }
       }
       scene3d.ground(495, 580).y = 0;
-      const center = scene3d.position.project(scene3d.camera);
+      const center = scene3d.position.project(scene3d.camera).clone();
+      const rect = scene3d.renderer.domElement.getBoundingClientRect();
+      const origin = scene3d.projected.set(0, 0, 0).project(scene3d.camera).clone();
+      const slopes = [[1, 0, 0], [0, 0, 1]].map((axis) => {
+        scene3d.projected.set(...axis).project(scene3d.camera).sub(origin);
+        return Math.abs(scene3d.projected.y * rect.height / (scene3d.projected.x * rect.width));
+      });
+      scene3d.ground(630, 730).y = 0;
+      const layoutPoint = scene3d.position.project(scene3d.camera);
       let fingerprint = 2166136261;
       for (const batch of scene3d.staticBatches.values()) {
         const values = new Uint32Array(batch.mesh.instanceMatrix.array.buffer, 0, batch.mesh.count * 16);
@@ -119,7 +127,10 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
       return { coverage, fingerprint, outsideRoads, stats: scene3d.getStats(),
         blocks: scene3d.environment.blocks,
         lots: scene3d.environment.lots.map(({ x, z, width, depth, kind, blockId }) => ({ x, z, width, depth, kind, blockId })),
-        center: { x: (center.x + 1) * innerWidth / 2, y: (1 - center.y) * innerHeight / 2 },
+        center: { x: (center.x + 1) * rect.width / 2, y: (1 - center.y) * rect.height / 2 },
+        layoutError: { x: (layoutPoint.x + 1) * rect.width / 2 - (scene3d.layoutX + 630 * scene3d.layoutSize / 990),
+          y: (1 - layoutPoint.y) * rect.height / 2 - (scene3d.layoutY + 730 * scene3d.layoutSize / 990) },
+        slopes, rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
         expectedY: innerHeight / 2 + 85 * Math.min(innerWidth, innerHeight) * .4 / 990,
         sinterklaas: scene3d.cityDecorations.filter((prop) => prop.unique) };
     });
@@ -127,7 +138,18 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
     assert.ok(city.outsideRoads);
     assert.ok(Math.abs(city.center.x - page.viewportSize().width / 2) < .001);
     assert.ok(Math.abs(city.center.y - city.expectedY) < .001);
-    assert.ok(city.stats.calls <= 13 && city.stats.geometries <= 14);
+    assert.ok(city.slopes.every((slope) => Math.abs(slope - 0.5) < 1e-8), `Irregular ground diagonals: ${city.slopes}`);
+    assert.ok(Math.abs(city.layoutError.x) < .001 && Math.abs(city.layoutError.y) < .001);
+    if (city.stats.postPasses) {
+      assert.equal(city.rect.x, 0);
+      assert.equal(city.rect.y, 0);
+      assert.equal(city.rect.width, city.stats.bufferWidth * city.stats.pixelScale);
+      assert.equal(city.rect.height, city.stats.bufferHeight * city.stats.pixelScale);
+      assert.ok(city.rect.width >= page.viewportSize().width && city.rect.height >= page.viewportSize().height);
+      assert.ok(city.rect.width - page.viewportSize().width < city.stats.pixelScale);
+      assert.ok(city.rect.height - page.viewportSize().height < city.stats.pixelScale);
+    }
+    assert.ok(city.stats.calls <= 13 + city.stats.postPasses && city.stats.geometries <= 14 + city.stats.postPasses);
     assert.deepEqual(city.sinterklaas, sinterklaas);
     checkBlockLayout(city.blocks, city.lots);
     for (const block of city.blocks) {
@@ -252,6 +274,62 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   assert.ok(crowd.triangles > initial.stats.triangles);
   t.diagnostic(`600 visible students and 2 buses at night: ${crowd.calls} draw calls, ${crowd.triangles} triangles, ${crowd.submissionMs.toFixed(1)}ms CPU submission (test machine).`);
 
+  // Style switches must preserve framing, transparency, bounded GPU resources and night lighting.
+  const styleResults = {};
+  for (const style of ['clean', 'dither', 'ink', 'clean', 'original']) {
+    await page.getByLabel('Scènestijl').selectOption(style);
+    assert.equal(new URL(page.url()).searchParams.get('sceneStyle'), style);
+    const result = await page.evaluate(() => {
+      const frames = [];
+      const gl = scene3d.renderer.getContext();
+      for (const darkness of [0, 1]) {
+        scene3d.begin(darkness);
+        scene3d.drawBus('central', pointsOfInterest.routeA.stop.x, pointsOfInterest.routeA.stop.y, false, 1, 0);
+        for (let i = 0; i < 600; i++) scene3d.drawStudent({ seq: i, flip: i % 2, bounceSpeed: 180, bouncePhase: i },
+          140 + i % 30 * 25, 450 + Math.floor(i / 30) * 18, false, 1, [], 0);
+        scene3d.render();
+        const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+        gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        let fingerprint = 2166136261;
+        let brightness = 0;
+        let opaque = true;
+        for (let i = 0; i < pixels.length; i += 4) {
+          fingerprint = Math.imul(fingerprint ^ pixels[i] ^ pixels[i + 1] << 8 ^ pixels[i + 2] << 16, 16777619) >>> 0;
+          brightness += pixels[i] + pixels[i + 1] + pixels[i + 2];
+          opaque &&= pixels[i + 3] === 255;
+        }
+        frames.push({ fingerprint, brightness: brightness / pixels.length, opaque });
+      }
+      // An empty scene must remain transparent, including after the colour/contour pass.
+      scene3d.scene.visible = false;
+      scene3d.render();
+      const transparent = new Uint8Array(4);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, transparent);
+      scene3d.scene.visible = true;
+      scene3d.render();
+      return { frames, transparent: [...transparent], stats: scene3d.getStats(),
+        camera: scene3d.camera.projectionMatrix.elements,
+        scaling: scene3d.renderer.domElement.style.imageRendering };
+    });
+    assert.equal(result.stats.style, style);
+    assert.equal(result.stats.postPasses, style === 'original' ? 0 : 1);
+    assert.equal(result.stats.textures, style === 'original' ? 0 : 1);
+    assert.ok(result.stats.calls <= 14 && result.stats.geometries <= 15, JSON.stringify(result.stats));
+    const scale = style === 'original' ? 1 : style === 'clean' ? 2 : 3;
+    assert.equal(result.stats.bufferWidth, 1920 / scale);
+    assert.equal(result.stats.bufferHeight, 1080 / scale);
+    assert.equal(result.scaling, style === 'original' ? 'auto' : 'pixelated');
+    assert.deepEqual(result.transparent, [0, 0, 0, 0]);
+    assert.deepEqual(errors, []);
+    assert.ok(result.frames.every((frame) => frame.opaque), `${style}: ${JSON.stringify(result.frames)}`);
+    assert.ok(result.frames[0].brightness > result.frames[1].brightness * 2);
+    if (styleResults[style]) assert.deepEqual(result.frames, styleResults[style].frames, 'Switching styles must produce stable pixels');
+    styleResults[style] = result;
+  }
+  assert.equal(new Set(Object.values(styleResults).map((result) => result.frames[0].fingerprint)).size, 4);
+  for (const result of Object.values(styleResults)) assert.deepEqual(result.camera, styleResults.original.camera);
+  t.diagnostic(`Pixel styles: clean ${styleResults.clean.stats.bufferWidth}×${styleResults.clean.stats.bufferHeight}; dither/ink ${styleResults.ink.stats.bufferWidth}×${styleResults.ink.stats.bufferHeight}, one extra draw call and one texture.`);
+
   const beforeResize = await page.evaluate(() => {
     studentAnimationData.clear();
     spawnStudentsForStop('routeA', 350);
@@ -275,6 +353,20 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   }
   await page.setViewportSize({ width: 1920, height: 1080 });
   assert.equal((await checkCity()).fingerprint, landscape.fingerprint);
+
+  for (const style of ['clean', 'dither', 'ink']) {
+    await page.getByLabel('Scènestijl').selectOption(style);
+    for (const viewport of [{ width: 3840, height: 2160 }, { width: 1080, height: 1920 },
+      { width: 1919, height: 1079 }, { width: 1081, height: 1919 }]) {
+      await page.setViewportSize(viewport);
+      const city = await checkCity();
+      const pixelSize = style === 'clean' ? 2 : 3;
+      assert.ok(city.stats.bufferWidth * city.stats.bufferHeight <= 1920 * 1080 / pixelSize ** 2);
+      assert.equal(city.stats.textures, 1);
+    }
+  }
+  await page.getByLabel('Scènestijl').selectOption('original');
+  await page.setViewportSize({ width: 1920, height: 1080 });
 
   for (const [date, event] of [['2026-12-15', 'christmas'], ['2026-10-31', 'halloween'],
     ['2026-04-05', 'easter'], ['2026-02-15', 'carnaval'], ['2026-05-05', 'bevrijdingsdag'],
@@ -322,6 +414,7 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   await page.waitForTimeout(100);
   assert.ok(await page.evaluate(() => sceneFrameId > 0 && weatherFrameId > 0));
 
+  await page.getByLabel('Scènestijl').selectOption('ink');
   const canLoseContext = await page.evaluate(() => {
     const extension = scene3d.renderer.getContext().getExtension('WEBGL_lose_context');
     if (!extension) return false;
@@ -334,8 +427,20 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
     await page.waitForTimeout(150);
     await page.evaluate(() => window.testContextExtension.restoreContext());
     await page.waitForFunction(() => !scene3d.contextLost);
-    await page.waitForTimeout(100);
+    await page.waitForFunction(() => scene3d.getStats().textures === 1 && scene3d.getStats().calls > 1);
+    const restoredAlpha = await page.evaluate(() => {
+      scene3d.render();
+      const gl = scene3d.renderer.getContext();
+      const pixel = new Uint8Array(4);
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+      return pixel[3];
+    });
+    assert.equal(restoredAlpha, 255);
   }
+  await page.reload();
+  await page.waitForFunction(() => window.scene3d?.getStats().frame > 2);
+  assert.equal(await page.evaluate(() => scene3d.style), 'ink');
+  assert.equal(await page.getByLabel('Scènestijl').inputValue(), 'ink');
   assert.deepEqual(spriteRequests, []);
   assert.deepEqual(errors, []);
 

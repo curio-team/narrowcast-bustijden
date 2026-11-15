@@ -54,6 +54,28 @@ te bekijken. Feestdagen blijven geregistreerd in `js/events/`; decoraties en kle
 `model` en `models` in plaats van afbeeldingsbestanden. Posities gebruiken vaste layoutcoördinaten,
 zodat een resize bestaande animaties niet verplaatst.
 
+Met `?compareStyles=1` verschijnt een keuzelijst voor de scènestijl. De keuze staat in de URL en blijft
+bij herladen behouden; zonder `sceneStyle` blijft de originele 3D-weergave actief. Direct vergelijken:
+
+| URL | Stijl |
+| --- | --- |
+| `?sceneStyle=original&compareStyles=1` | Originele 3D-weergave |
+| `?sceneStyle=clean&compareStyles=1` | Heldere pixels: fijne pixels en subtiel beperkte kleuren |
+| `?sceneStyle=dither&compareStyles=1` | Warm raster: grove pixels, warmere kleuren en geordend raster |
+| `?sceneStyle=ink&compareStyles=1` | Pixelinkt: grove pixels, kleurvlakken en donkere binnencontouren |
+
+Op 1920 × 1080 rendert `clean` op 960 × 540 en `dither`/`ink` op 640 × 360. De browser vergroot de
+scène met scherpe pixels; de vertrektijden en weereffecten behouden hun eigen resolutie. Op grotere
+schermen groeit de pixelgrootte mee om hetzelfde renderbudget te bewaren. De camera kijkt onder 30°
+op de grond: diagonalen langs de wereldassen volgen daardoor een vast 2:1-pixelpatroon. Vergroting
+gebruikt hele pixels; bij afwijkende schermmaten valt de kleine overmaat buiten beeld. Schuine daken,
+gedraaide objecten en rondingen kunnen andere trappatronen hebben. Iedere pixelstijl gebruikt
+één kleine kleurtextuur en één extra GPU-pass; alleen `ink` leest vier buurpixels voor contouren.
+Er zijn geen CPU-pixelbewerkingen of extra geometriepassen. `getStats()` telt alle draw calls samen
+en toont `style`, `pixelScale`, `postPasses` en de werkelijke renderresolutie. Vergelijk op het
+narrowcastapparaat zelf: lagere resolutie bespaart fragmentwerk, maar de stad houdt hetzelfde aantal
+driehoeken en instanties. `scene3d.setStyle('clean')` wisselt ook zonder keuzelijst.
+
 De stad vult het hele scherm met doorlopende bestrating, zijstraten, gebouwen en groene pleinen.
 De camera blijft op dezelfde halte gericht. De straten begrenzen samenhangende bouwblokken: volledig
 bebouwd, volledig park, of een rechte verdeling met de helft bebouwing en de helft park. Gebouwen staan
