@@ -1,0 +1,7 @@
+{
+  "name": "narrowcast-bustijden",
+  "private": true,
+  "scripts": {
+    "models": "node tools/model-server.cjs"
+  }
+}

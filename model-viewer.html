@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Model viewer</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/model-viewer.css">
+</head>
+<body>
+  <aside>
+    <h1>Model viewer</h1>
+    <p id="reload-status" role="status">Connecting…</p>
+    <label>Model <select id="model"></select></label>
+    <label>Scene style <select id="style"></select></label>
+    <label>Lighting
+      <select id="lighting">
+        <option value="day">Day</option>
+        <option value="dusk">Dusk</option>
+        <option value="night">Night</option>
+        <option value="dawn">Dawn</option>
+      </select>
+    </label>
+    <label>Rotation <input id="angle" type="range" min="-180" max="180" value="0"></label>
+    <label>Zoom <input id="zoom" type="range" min="0.5" max="5" step="0.05" value="1"></label>
+    <label class="toggle"><input id="spin" type="checkbox"> Auto rotate</label>
+    <fieldset id="student-controls" hidden>
+      <legend>Student</legend>
+      <label>Variant
+        <select id="variant">
+          <option value="0">1</option><option value="1">2</option>
+          <option value="2">3</option><option value="3">4</option>
+        </select>
+      </label>
+      <label>Pose <input id="pose" type="range" min="-3" max="3" value="0"></label>
+      <label>Outfit
+        <select id="outfit" multiple size="7">
+          <option value="sinterklaas/student-hat1">Sinterklaas hat 1</option>
+          <option value="sinterklaas/student-hat2">Sinterklaas hat 2</option>
+          <option value="sinterklaas/student-hat3">Sinterklaas hat 3</option>
+          <option value="christmas/student-sweater1">Christmas sweater</option>
+          <option value="christmas/student-hat1">Christmas hat</option>
+          <option value="carnaval/student-kiel1">Carnival shirt</option>
+          <option value="carnaval/student-hat1">Carnival hat</option>
+          <option value="paarse-vrijdag/t-shirt">Purple Friday shirt</option>
+        </select>
+      </label>
+    </fieldset>
+    <button id="reset" type="button">Reset view</button>
+    <p id="details"></p>
+  </aside>
+  <main id="viewport" aria-label="Model preview">
+    <canvas aria-label="3D model"></canvas>
+    <p id="error" role="alert" hidden></p>
+    <p class="hint">Drag to rotate · Scroll to zoom</p>
+  </main>
+  <script src="js/model-reload.js"></script>
+  <script type="module">
+    import('./js/model-viewer.js').catch((error) => {
+      const message = document.querySelector('#error');
+      message.hidden = false;
+      message.textContent = error.message;
+    });
+  </script>
+</body>
+</html>

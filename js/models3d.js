@@ -47,9 +47,7 @@ function stop(add, x, z) {
   for (let n = 0; n < 3; n++) add('box', '#987f45', x + .09, 2.7 - n * .15, z, .02, .035, .38);
 }
 
-// The stop itself stays fixed. Viewport-sized ground and city blocks are generated separately.
-export const scenery = model(7, (add) => {
-  // Tree, planter and the recognisable blue shelter with its orange bench.
+function stopTree(add) {
   add('box', '#65735d', -6.4, .37, 2.8, 2.25, .35, 2.25);
   add('sphere', '#719650', -6.4, .65, 2.8, 2.2, .7, 2.2);
   add('cylinder', '#aa6946', -6.4, 2.1, 2.8, .52, 3.0, .52);
@@ -57,6 +55,9 @@ export const scenery = model(7, (add) => {
   add('sphere', '#6b9d57', -6.4, 4.7, 2.8, 3.5, 3.8, 3.4);
   add('sphere', '#91b95a', -6.8, 5.25, 3.0, 2.6, 2.5, 2.6);
   add('sphere', '#b2cd70', -7.15, 5.8, 3.05, 1.35, 1.15, 1.3);
+}
+
+function shelter(add) {
   for (const z of [-1.4, 1.8]) {
     for (const x of [-5.5, -3.8]) add('box', '#31536c', x, 1.55, z, .10, 2.7, .10);
     add('box', '#31536c', -4.65, 2.86, z, 1.95, .10, .10);
@@ -77,6 +78,12 @@ export const scenery = model(7, (add) => {
     add('box', '#31536c', -4.9, .5, z, .12, .55, .12);
     add('box', '#31536c', -4.7, 1.03, z, .9, .08, .09);
   }
+}
+
+// The stop itself stays fixed. Viewport-sized ground and city blocks are generated separately.
+export const scenery = model(7, (add) => {
+  stopTree(add);
+  shelter(add);
   stop(add, -3.45, -2.55);
   stop(add, 6.9, -2.1);
 });
@@ -688,6 +695,29 @@ function prop(key) {
       }
     }
   });
+}
+
+export function getModelPreviews() {
+  return [
+    ...['bus', 'bus-open', 'balloon-1', 'balloon-2'].map((key) => ({ key, group: 'Vehicles', create: () => getModel(key) })),
+    { key: 'student', group: 'People', create: () => getModel('student||0|0') },
+    ...['sinterklaas/sinterklaas', ...[1, 2, 3, 4].map((n) => `sinterklaas/present${n}`),
+      ...[1, 2, 3].map((n) => `halloween/pumpkin${n}`),
+      'easter/egg', 'easter/eggs', 'easter/egg-chick', 'easter/choco-bunny', 'easter/bunny',
+      'bevrijdingsdag/flag', 'bevrijdingsdag/flowers', 'bevrijdingsdag/jeep', 'carnaval/parade-car']
+      .map((key) => ({ key, group: 'Props', create: () => getModel(key) })),
+    { key: 'scenery', group: 'City', create: () => scenery },
+    { key: 'shelter', group: 'City', create: () => model(3.3, shelter) },
+    { key: 'stop-tree', group: 'City', create: () => model(7, stopTree) },
+    { key: 'stop', group: 'City', create: () => model(3.2, (add) => stop(add, 0, 0)) },
+    { key: 'tree', group: 'City', create: () => model(5, (add) => cityTree(add, 0, 0, 5, lotRandom(1, 1))) },
+    { key: 'street-lamp', group: 'City', create: () => model(5, (add) => streetLamp(add, 1.3, 0, 0)) },
+    { key: 'bench', group: 'City', create: () => model(1.3, (add) => parkBench(add, 0, 0)) },
+    { key: 'building', group: 'City', create: () => model(7, (add) => building(add,
+      { x: 0, z: 0, width: 6, depth: 8, height: 6.35, floors: 3, random: lotRandom(1, 1) })) },
+    { key: 'park', group: 'City', create: () => model(5, (add) => cityPark(add,
+      { x: 0, z: 0, width: 16, depth: 20, random: lotRandom(1, 1) })) },
+  ];
 }
 
 export function getModel(key) {
