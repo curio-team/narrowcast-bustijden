@@ -50,11 +50,7 @@ function stop(add, x, z) {
 function stopTree(add) {
   add('box', '#65735d', -6.4, .37, 2.8, 2.25, .35, 2.25);
   add('sphere', '#719650', -6.4, .65, 2.8, 2.2, .7, 2.2);
-  add('cylinder', '#aa6946', -6.4, 2.1, 2.8, .52, 3.0, .52);
-  add('cylinder', '#c98956', -6.12, 2.8, 2.8, .23, 1.6, .23, 0, 0, -.4);
-  add('sphere', '#6b9d57', -6.4, 4.7, 2.8, 3.5, 3.8, 3.4);
-  add('sphere', '#91b95a', -6.8, 5.25, 3.0, 2.6, 2.5, 2.6);
-  add('sphere', '#b2cd70', -7.15, 5.8, 3.05, 1.35, 1.15, 1.3);
+  cityTree(add, -6.4, 2.8, 6.15, lotRandom(11, 7), 0);
 }
 
 function shelter(add) {
@@ -208,13 +204,56 @@ function framedWindow(add, color, x, y, z, horizontalAxis) {
   glass.pixelPlane = { ...group, inset: 1 };
 }
 
-function cityTree(add, x, z, height, random) {
-  const green = ['#789b61', '#8eab68', '#679675', '#99ad69'][Math.floor(random() * 4)];
-  add('sphere', '#7f9769', x + .25, .24, z + .15, height * .65, .02, height * .5);
-  add('cylinder', '#967455', x, .225 + height * .25, z, .19, height * .5, .19);
-  add('sphere', green, x, .225 + height * .67, z, height * .62, height * .64, height * .59);
-  add('sphere', '#a8bc7b', x - height * .09, .225 + height * .87, z + height * .04,
-    height * .40, height * .35, height * .39);
+function cityTree(add, x, z, height, random, variant = random() < .5 ? 0 : 1) {
+  const palettes = [
+    ['#75965e', '#88a66b', '#a0b779', '#60834f'],
+    ['#6e946b', '#83a47a', '#9db78b', '#587c58'],
+    ['#829b63', '#97ae74', '#adbf87', '#6b8756'],
+  ];
+  const [leaf, light, top, shade] = palettes[Math.floor(random() * palettes.length)];
+  const yaw = random() * Math.PI * 2;
+  const c = Math.cos(yaw);
+  const s = Math.sin(yaw);
+  const bark = variant === 0 ? '#947252' : '#a18b6b';
+  const crown = (color, dx, y, dz, w, h, d, tilt = 0) => {
+    add('sphere', color, x + (dx * c + dz * s) * height, .225 + y * height,
+      z + (dz * c - dx * s) * height, w * height, h * height, d * height, 0, yaw, tilt);
+  };
+  const branch = (dx, y, dz, start) => {
+    const bx = (dx * c + dz * s) * height;
+    const by = (y - start) * height;
+    const bz = (dz * c - dx * s) * height;
+    add('cone', bark, x + bx / 2, .225 + (start + y) * height / 2, z + bz / 2,
+      height * .034, Math.hypot(bx, by, bz), height * .034,
+      Math.atan2(bz, by), 0, -Math.atan2(bx, Math.hypot(by, bz)));
+  };
+
+  // A tapered trunk, root flare and visible forks support overlapping, irregular leaf masses.
+  crown('#7f9769', .045, .003, .03, variant === 0 ? .72 : .48, .005, .54);
+  add('cone', bark, x, .225 + height * .32, z, height * .072, height * .64, height * .065);
+  add('cone', bark, x, .225 + height * .06, z, height * .11, height * .12, height * .09);
+  const spread = variant === 0 ? .18 : .10;
+  branch(-spread, .64, .035, .28);
+  branch(spread, .66, -.06, .34);
+  branch(.025, .64, spread * .8, .39);
+
+  // Broad, spreading crown versus a narrower, upright crown; both retain an uneven outline.
+  if (variant === 0) {
+    crown(shade, 0, .61, 0, .52, .35, .46);
+    crown(leaf, -.19, .65, .015, .38, .38, .40, -.12);
+    crown(leaf, .18, .68, -.045, .36, .41, .36, .13);
+    crown(leaf, -.04, .73, -.16, .40, .41, .35);
+    crown(light, .035, .72, .16, .41, .38, .35, -.08);
+    crown(light, -.08, .83, -.015, .40, .32, .37);
+    crown(top, .09, .87, .055, .30, .24, .29, .10);
+  } else {
+    crown(shade, .005, .69, 0, .33, .52, .32);
+    crown(leaf, -.10, .58, .03, .25, .31, .27, -.18);
+    crown(leaf, .10, .64, -.015, .26, .34, .25, .15);
+    crown(leaf, .01, .75, -.09, .27, .38, .24, -.06);
+    crown(light, -.03, .76, .10, .28, .36, .25, .12);
+    crown(top, .015, .87, -.005, .25, .26, .24, -.10);
+  }
 }
 
 function streetLamp(add, headX, z, postX) {
@@ -1024,7 +1063,8 @@ export function getModelPreviews() {
     { key: 'shelter', group: 'City', create: () => model(3.3, shelter) },
     { key: 'stop-tree', group: 'City', create: () => model(7, stopTree) },
     { key: 'stop', group: 'City', create: () => model(3.2, (add) => stop(add, 0, 0)) },
-    { key: 'tree', group: 'City', create: () => model(5, (add) => cityTree(add, 0, 0, 5, lotRandom(1, 1))) },
+    { key: 'tree', group: 'City', create: () => model(5.25, (add) => cityTree(add, 0, 0, 5, lotRandom(1, 1), 0)) },
+    { key: 'tree-2', group: 'City', create: () => model(5.25, (add) => cityTree(add, 0, 0, 5, lotRandom(1, 1), 1)) },
     { key: 'street-lamp', group: 'City', create: () => model(5, (add) => streetLamp(add, 1.3, 0, 0)) },
     { key: 'bench', group: 'City', create: () => model(1.3, (add) => parkBench(add, 0, 0)) },
     { key: 'building', group: 'City', create: () => model(7, (add) => building(add,
