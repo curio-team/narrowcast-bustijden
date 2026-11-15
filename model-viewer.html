@@ -1,12 +1,17 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport"
+        content="width=device-width, initial-scale=1">
   <title>Model viewer</title>
-  <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="css/model-viewer.css">
+  <link rel="icon"
+        href="data:,">
+  <link rel="stylesheet"
+        href="css/model-viewer.css">
 </head>
+
 <body>
   <aside>
     <h1>Model viewer</h1>
@@ -20,20 +25,39 @@
         <option value="dawn">Dawn</option>
       </select>
     </label>
-    <label>Rotation <input id="angle" type="range" min="-180" max="180" value="0"></label>
-    <label>Zoom <input id="zoom" type="range" min="0.5" max="5" step="0.05" value="1"></label>
-    <label class="toggle"><input id="spin" type="checkbox"> Auto rotate</label>
-    <fieldset id="student-controls" hidden>
+    <label>Rotation <input id="angle"
+             type="range"
+             min="-180"
+             max="180"
+             value="0"></label>
+    <label>Zoom <input id="zoom"
+             type="range"
+             min="0.05"
+             max="5"
+             step="0.05"
+             value="1"></label>
+    <label class="toggle"><input id="spin"
+             type="checkbox"> Auto rotate</label>
+    <fieldset id="student-controls"
+              hidden>
       <legend>Student</legend>
       <label>Variant
         <select id="variant">
-          <option value="0">1</option><option value="1">2</option>
-          <option value="2">3</option><option value="3">4</option>
+          <option value="0">1</option>
+          <option value="1">2</option>
+          <option value="2">3</option>
+          <option value="3">4</option>
         </select>
       </label>
-      <label>Pose <input id="pose" type="range" min="-3" max="3" value="0"></label>
+      <label>Pose <input id="pose"
+               type="range"
+               min="-3"
+               max="3"
+               value="0"></label>
       <label>Outfit
-        <select id="outfit" multiple size="7">
+        <select id="outfit"
+                multiple
+                size="7">
           <option value="sinterklaas/student-hat1">Sinterklaas hat 1</option>
           <option value="sinterklaas/student-hat2">Sinterklaas hat 2</option>
           <option value="sinterklaas/student-hat3">Sinterklaas hat 3</option>
@@ -45,12 +69,16 @@
         </select>
       </label>
     </fieldset>
-    <button id="reset" type="button">Reset view</button>
+    <button id="reset"
+            type="button">Reset view</button>
     <p id="details"></p>
   </aside>
-  <main id="viewport" aria-label="Model preview">
+  <main id="viewport"
+        aria-label="Model preview">
     <canvas aria-label="3D model"></canvas>
-    <p id="error" role="alert" hidden></p>
+    <p id="error"
+       role="alert"
+       hidden></p>
     <p class="hint">Drag to rotate · Scroll to zoom</p>
   </main>
   <script type="module">
@@ -61,4 +89,5 @@
     });
   </script>
 </body>
+
 </html>
