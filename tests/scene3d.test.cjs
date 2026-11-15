@@ -160,6 +160,139 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   };
   const landscape = await checkCity();
 
+  const checkPixelDetails = async () => {
+    const details = await page.evaluate(async () => {
+      const THREE = await import('/js/vendor/three.module.min.js');
+      const { scenery, getModel } = await import('/js/models3d.js');
+      scene3d.begin(0);
+      const fixture = new THREE.Scene();
+      fixture.add(scene3d.ambient.clone(), scene3d.sun.clone());
+      const batches = new Map();
+      const gl = scene3d.renderer.getContext();
+      const { width, height } = scene3d.pixelEffect.target;
+      const point = new THREE.Vector3();
+      const root = new THREE.Matrix4();
+      const stems = new Map([...scenery.parts, ...scene3d.environment.parts]
+        .filter((part) => part.minPixelWidth > 0).map((part) => [part.matrix.elements[0], part]));
+      const widths = [];
+      const busFrames = [];
+      const busCenters = [];
+      const windows = [];
+      const pavingFrames = [];
+      const readPatch = (x, y, size) => {
+        const pixels = new Uint8Array(size * size * 4);
+        scene3d.renderer.readRenderTargetPixels(scene3d.pixelEffect.target, x, y, size, size, pixels);
+        return pixels;
+      };
+      const render = (model, transform) => {
+        batches.forEach((batch) => { batch.mesh.count = 0; });
+        scene3d.submit(model, transform, 1, batches);
+        batches.forEach((batch) => { batch.commit(); fixture.add(batch.mesh); });
+        scene3d.pixelEffect.render(scene3d.renderer, fixture, scene3d.camera);
+      };
+      try {
+        for (const [diameter, part] of stems) {
+          const samples = [];
+          const centered = { ...part, matrix: part.matrix.clone().setPosition(0, 0, 0) };
+          for (const phase of [.05, .25, .49, .51, .75, .95]) {
+            point.set(phase * 2 / width, 0, 0).unproject(scene3d.camera);
+            root.makeTranslation(point.x, point.y, point.z);
+            render({ parts: [centered] }, root);
+            const pixels = new Uint8Array(width * 4);
+            gl.readPixels(0, Math.floor(height / 2), width, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+            samples.push(pixels.filter((value, i) => i % 4 === 3 && value > 0).length);
+          }
+          widths.push({ diameter, samples });
+        }
+        for (const phase of [0, .1, .25, .5, .75, 1]) {
+          scene3d.begin(0);
+          const stop = pointsOfInterest.routeA.stop;
+          scene3d.drawBus('central', stop.x + phase * 20, stop.y, true, 1, phase * 160);
+          root.copy(scene3d.root);
+          point.setFromMatrixPosition(root).project(scene3d.camera);
+          const x = (point.x + 1) * width / 2;
+          const y = (point.y + 1) * height / 2;
+          busCenters.push([x, y]);
+          render(getModel('bus'), root);
+          const pixels = new Uint8Array(96 * 96 * 4);
+          scene3d.renderer.readRenderTargetPixels(scene3d.pixelEffect.target,
+            Math.round(x) - 48, Math.round(y) - 16, 96, 96, pixels);
+          busFrames.push(pixels);
+        }
+        for (const axis of [0, 2]) {
+          const frame = scene3d.environment.parts.find((part) => part.pixelPlane?.framed
+            && !part.pixelPlane.inset && part.pixelPlane.axes[0] === axis);
+          const pane = scene3d.environment.parts.find((part) => part.pixelPlane?.inset === 1
+            && part.pixelPlane.matrix === frame.matrix);
+          const anchor = new THREE.Vector3().setFromMatrixPosition(frame.matrix);
+          const group = frame.matrix.clone().setPosition(0, 0, 0);
+          const parts = [frame, pane].map((part, i) => ({ ...part, shape: 'box-glow',
+            color: new THREE.Color(i ? '#000' : '#fff'),
+            matrix: part.matrix.clone().setPosition(new THREE.Vector3().setFromMatrixPosition(part.matrix).sub(anchor)),
+            pixelPlane: { ...part.pixelPlane, matrix: group } }));
+          const frames = [];
+          const highlights = [];
+          for (const phase of [.05, .25, .49, .51, .75, .95]) {
+            point.set(phase * 2 / width, phase * 1.4 / height, 0).unproject(scene3d.camera);
+            root.makeTranslation(point.x, point.y, point.z);
+            render({ parts }, root);
+            point.setFromMatrixPosition(scene3d.matrix).project(scene3d.camera);
+            const pixels = readPatch(Math.round((point.x + 1) * width / 2) - 16,
+              Math.floor((point.y + 1) * height / 2 + 1e-5) - 16, 32);
+            frames.push([...pixels]);
+            for (let x = 0; x < 32; x++) {
+              let topFrame = -1;
+              let topPane = -1;
+              for (let y = 0; y < 32; y++) {
+                const i = (y * 32 + x) * 4;
+                if (pixels[i + 3] && pixels[i] > 0) topFrame = y;
+                if (pixels[i + 3] && pixels[i] === 0) topPane = y;
+              }
+              if (topPane >= 0) highlights.push(topFrame - topPane);
+            }
+          }
+          windows.push({ axis, differences: frames.map((pixels) => pixels.filter((value, i) => value !== frames[0][i]).length), highlights });
+        }
+        point.set(0, 0, 0).unproject(scene3d.camera);
+        const center = point.clone();
+        for (const lift of [0, .225, .75]) {
+          root.identity();
+          render({ parts: [{ shape: 'paving', color: new THREE.Color('#fff'),
+            matrix: new THREE.Matrix4().makeScale(100, .025, 100).setPosition(center.x, center.y + lift, center.z) }] }, root);
+          pavingFrames.push([...readPatch(Math.floor(width / 2) - 16, Math.floor(height / 2) - 16, 32)]);
+          if (lift === 0) pavingFrames.push([...readPatch(Math.floor(width / 2) - 16
+            + scene3d.lightingUniforms.uPavingGrid.value.x * 2, Math.floor(height / 2) - 16, 32)]);
+        }
+        const changedBusPixels = busFrames.slice(1).map((pixels) => {
+          let changed = 0;
+          for (let i = 0; i < pixels.length; i += 4) {
+            if (pixels.subarray(i, i + 4).some((value, channel) => value !== busFrames[0][i + channel])) changed++;
+          }
+          return changed;
+        });
+        return { widths, busCenters, changedBusPixels, windows,
+          pavingDifferences: pavingFrames.map((pixels) => pixels.filter((value, i) => value !== pavingFrames[0][i]).length) };
+      } finally {
+        batches.forEach((batch) => batch.dispose());
+        fixture.clear();
+      }
+    });
+    assert.ok(details.widths.length >= 3, 'Exercise authored street poles, stop poles and tree trunks');
+    for (const stem of details.widths) {
+      assert.ok(stem.samples[0] >= 1, `Missing stem: ${JSON.stringify(stem)}`);
+      assert.equal(new Set(stem.samples).size, 1, `Inconsistent stem width: ${JSON.stringify(stem)}`);
+    }
+    assert.ok(details.busCenters.flat().every((value) => Math.abs(value - Math.round(value)) < 1e-6));
+    assert.ok(details.changedBusPixels.every((count) => count <= 5), `Unstable bus edges: ${JSON.stringify(details)}`);
+    for (const window of details.windows) {
+      assert.ok(window.differences.every((count) => count === 0), `Window varies with pixel position: ${JSON.stringify(window)}`);
+      assert.ok(window.highlights.length > 0 && window.highlights.every((height) => height === 1),
+        `Inconsistent window highlights: ${JSON.stringify(window)}`);
+    }
+    assert.ok(details.pavingDifferences.every((count) => count === 0),
+      `Pavement must repeat on the pixel grid and match between separate surface heights: ${details.pavingDifferences}`);
+  };
+
   // Exercise the real date-to-solar-state path as well as the resulting rendered colours.
   const phases = {};
   for (const [phase, hour] of [['day', '12:00'], ['dusk', '16:45'], ['evening', '17:30'],
@@ -357,12 +490,14 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   for (const style of ['clean', 'dither', 'ink']) {
     await page.getByLabel('Scènestijl').selectOption(style);
     for (const viewport of [{ width: 3840, height: 2160 }, { width: 1080, height: 1920 },
-      { width: 1919, height: 1079 }, { width: 1081, height: 1919 }]) {
+      { width: 1919, height: 1079 }, { width: 1081, height: 1919 },
+      { width: 1280, height: 1080 }, { width: 2560, height: 1080 }]) {
       await page.setViewportSize(viewport);
       const city = await checkCity();
       const pixelSize = style === 'clean' ? 2 : 3;
       assert.ok(city.stats.bufferWidth * city.stats.bufferHeight <= 1920 * 1080 / pixelSize ** 2);
       assert.equal(city.stats.textures, 1);
+      if (viewport.height === 1080) await checkPixelDetails();
     }
   }
   await page.getByLabel('Scènestijl').selectOption('original');
@@ -395,9 +530,9 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
       addBusToAnimationData(busToCentral, pointsOfInterest.routeA.stop, pointsOfInterest.routeA.destination, fadeMode(FADE_OUT));
     }
     busAnimationData.forEach((bus) => { bus.startTime = Date.now() - 4000; });
+    window.expiredTestBuses = [...busAnimationData.keys()];
   });
-  await page.waitForTimeout(120);
-  assert.equal(await page.evaluate(() => busAnimationData.size), 0);
+  await page.waitForFunction(() => expiredTestBuses.every((id) => !busAnimationData.has(id)));
 
   // Hidden tabs release both animation loops, then restart cleanly.
   await page.evaluate(() => {

@@ -22,8 +22,18 @@ function model(height, build) {
     position.set(x, y, z);
     scale.set(w, h, d);
     rotation.setFromEuler(euler.set(rx, ry, rz));
-    parts.push({ shape: glow ? `${shape}-glow` : shape, color: colors.get(color),
-      matrix: new THREE.Matrix4().compose(position, rotation, scale) });
+    const part = { shape: glow ? `${shape}-glow` : shape, color: colors.get(color),
+      matrix: new THREE.Matrix4().compose(position, rotation, scale) };
+    if (rx === 0 && rz === 0) {
+      if ((shape === 'box' || shape === 'cylinder') && h >= Math.max(w, d) * 3) {
+        part.minPixelWidth = 1;
+      } else if (shape === 'box' && Math.min(w, h, d) < .25) {
+        const normalAxis = w <= h && w <= d ? 0 : h <= d ? 1 : 2;
+        part.pixelPlane = { matrix: part.matrix, axes: normalAxis === 0 ? [2, 1] : normalAxis === 1 ? [0, 2] : [0, 1] };
+      }
+    }
+    parts.push(part);
+    return part;
   };
   build(add, parts);
   return { height, parts };
@@ -169,17 +179,26 @@ function building(add, lot) {
     for (let column = 0; column < frontColumns; column++) {
       const wx = x - width / 2 + (column + .5) * width / frontColumns;
       const glass = random() < .25 ? '#a9b9b5' : '#647e89';
-      add('box', '#ded7c6', wx, y, z + depth / 2 + .025, .87, 1.12, .055);
-      add('box', glass, wx, y + .035, z + depth / 2 + .06, .68, .88, .025);
+      framedWindow(add, glass, wx, y, z + depth / 2 + .025, 0);
     }
     for (let column = 0; column < sideColumns; column++) {
       const wz = z - depth / 2 + (column + .5) * depth / sideColumns;
-      add('box', '#ded7c6', x + width / 2 + .025, y, wz, .055, 1.12, .87);
-      add('box', '#748d96', x + width / 2 + .06, y + .035, wz, .025, .88, .68);
+      framedWindow(add, '#748d96', x + width / 2 + .025, y, wz, 2);
     }
   }
   add('box', '#4e6268', x, .99, z + depth / 2 + .09, .82, 1.75, .08);
   add('box', '#d5c9b0', x, 1.93, z + depth / 2 + .13, 1.05, .12, .18);
+}
+
+function framedWindow(add, color, x, y, z, horizontalAxis) {
+  const front = horizontalAxis === 0;
+  const frame = add('box', '#ded7c6', x, y, z, front ? .87 : .055, 1.12, front ? .055 : .87);
+  const glass = add('box', color, x + (front ? 0 : .035), y + .035, z + (front ? .035 : 0),
+    front ? .68 : .025, .88, front ? .025 : .68);
+  // Frame and pane share a pixel anchor; the one-pixel inset survives every render scale.
+  const group = { matrix: frame.matrix, axes: [horizontalAxis, 1], framed: true };
+  frame.pixelPlane = group;
+  glass.pixelPlane = { ...group, inset: 1 };
 }
 
 function cityTree(add, x, z, height, random) {
@@ -546,7 +565,10 @@ function balloon(passengerCount) {
       const root = new THREE.Matrix4().makeScale(scale, scale, scale);
       root.setPosition(centerX - .1 * scale, .13, .015);
       for (const part of getModel(`student||0|${n * 2}`).parts) {
-        parts.push({ ...part, matrix: new THREE.Matrix4().multiplyMatrices(root, part.matrix) });
+        const passengerPart = { ...part, matrix: new THREE.Matrix4().multiplyMatrices(root, part.matrix) };
+        if (part.pixelPlane) passengerPart.pixelPlane = { ...part.pixelPlane,
+          matrix: new THREE.Matrix4().multiplyMatrices(root, part.pixelPlane.matrix) };
+        parts.push(passengerPart);
       }
       const skin = n === 0 ? '#e3b48e' : '#8d5c45';
       const shirt = n === 0 ? '#28354e' : '#58495f';
