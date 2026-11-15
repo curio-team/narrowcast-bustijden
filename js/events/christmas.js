@@ -20,4 +20,5 @@ registerHolidayEvent({
     { model: 'sinterklaas/present3', height: 40, count: [1, 3] },
     { model: 'sinterklaas/present4', height: 40, count: [1, 3] },
   ],
+  cityProps: [1, 2, 3, 4].map((variant) => ({ model: `sinterklaas/present${variant}`, height: 40, count: 12 })),
 });

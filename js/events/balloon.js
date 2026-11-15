@@ -38,6 +38,7 @@
           toX: leftToRight ? scene.width + width : -width,
           baseY: scene.height * randomBetween(0.1, 0.5),
           bobPhase: Math.random() * Math.PI * 2,
+          passengers: 1 + Math.floor(Math.random() * 2),
         };
       }
 
@@ -50,7 +51,7 @@
 
       const x = balloon.fromX + (balloon.toX - balloon.fromX) * progress;
       const y = balloon.baseY + Math.sin(now / 1200 + balloon.bobPhase) * balloon.height * 0.15;
-      scene.models.drawFloating('balloon', x, y, balloon.height);
+      scene.models.drawFloating(`balloon-${balloon.passengers}`, x, y, balloon.height);
     },
   });
 })();

@@ -38,7 +38,8 @@ Gebruik de [ovapi](http://v0.ovapi.nl/stopareacode) om alle bushaltes in de buur
 
 De halte, bussen, studenten, kleding en feestdagdecoraties worden opgebouwd uit eenvoudige 3D-vormen in
 `js/models3d.js`. `js/scene3d.js` tekent deze met WebGL 2 en een orthografische camera onder een isometrische
-hoek. De PNG-bestanden zijn alleen nog referentiemateriaal; de scène laadt geen sprites of texturen.
+hoek. De scène laadt geen sprites of texturen; de oude sprites en het Paint.NET-bronbestand zijn verwijderd.
+In `assets/` staat alleen nog het logo dat bovenaan deze README wordt gebruikt.
 Three.js 0.182.0 staat lokaal in `js/vendor/`, inclusief MIT-licentie. De site heeft geen buildstap nodig.
 
 Voor narrowcastschermen is de animatie begrensd op 30 fps en maximaal 1920 × 1080 renderpixels, ook op
@@ -53,8 +54,47 @@ te bekijken. Feestdagen blijven geregistreerd in `js/events/`; decoraties en kle
 `model` en `models` in plaats van afbeeldingsbestanden. Posities gebruiken vaste layoutcoördinaten,
 zodat een resize bestaande animaties niet verplaatst.
 
+De stad vult het hele scherm met doorlopende bestrating, zijstraten, gebouwen en groene pleinen.
+De camera blijft op dezelfde halte gericht. De straten begrenzen samenhangende bouwblokken: volledig
+bebouwd, volledig park, of een rechte verdeling met de helft bebouwing en de helft park. Gebouwen staan
+in aaneengesloten rijen; parken hebben één doorlopend gazon met gedeelde wandelpaden. De indeling is
+deterministisch: bij een resize blijven dezelfde gebouwen, bomen en parken op dezelfde plekken staan.
+Bestrating gebruikt een procedureel
+tegelpatroon; er worden geen losse meshes voor iedere tegel aangemaakt. De statische stad wordt alleen
+opnieuw opgebouwd bij een resize of feestdagwissel en deelt de instancing-batches met de decoraties.
+
+Een feestdag kan naast `props` bij de halte ook `cityProps` registreren:
+
+```js
+cityProps: [
+  { model: 'sinterklaas/present1', height: 40, count: 12,
+    placements: ['roof', 'park', 'pavement'] },
+  { model: 'sinterklaas/sinterklaas', height: 120, count: 1,
+    placements: ['roof'], unique: true },
+]
+```
+
+De plaatsing houdt rekening met dakhoogtes, straten, andere decoraties en de vrije ruimte rond de halte.
+Sinterklaas staat precies één keer op een dak. `scene3d.getStats()` toont ook het aantal gebouwen,
+groene kavels en stadsdecoraties.
+
+`js/lighting3d.js` regelt de kleuren van de 3D-scène: warm bij zonsondergang, paars in de avond,
+koel en minder verzadigd in de nacht, roze bij zonsopkomst en helder overdag. De overgang gebruikt
+de bestaande seizoensafhankelijke zonnetijd en wordt iedere seconde bijgewerkt. Straatlampen dimmen
+vanzelf overdag en verlichten na zonsondergang de bestrating, bomen en gevels. Bussen hebben witte
+koplampbundels en rode achterlichten die met de bus meebewegen en meevervagen.
+
+Deze verlichting gebruikt vaste shaderberekeningen voor de dichtstbijzijnde lampkolommen en maximaal
+twee bussen, met gedeelde instancing-batches voor lichtarmaturen en zachte gloed. Er zijn geen
+schaduwkaarten, bloom-passen of aparte realtime lichtobjecten per lantaarnpaal nodig. `scene3d.getStats()`
+toont ook `phase`, `saturation`, `nightLights`, `streetLights` en `busLights`.
+Bekijk bijvoorbeeld `?fakeTime=2026-11-20T23:00:00%2B01:00` voor nacht; op die datum geven 08:45,
+16:45 en 17:30 respectievelijk ochtendlicht, zonsondergang en avondlicht.
+
 De browsertest controleert onder meer 600 zichtbare studenten, feestdagwisselingen, opruimen van
-animaties, portret/4K-resizes en pauzeren bij een verborgen tabblad:
+animaties, schermvullende grond, stabiele plaatsing van stadsdecoraties, portret/4K/brede resizes en
+pauzeren bij een verborgen tabblad. De test controleert ook de vijf lichtfases, licht op het wegdek,
+meebewegende koplampen, rode achterlichten en het vaste renderbudget:
 
 ```sh
 npm ci

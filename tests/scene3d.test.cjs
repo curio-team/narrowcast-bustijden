@@ -5,6 +5,43 @@ const fs = require('node:fs/promises');
 const path = require('node:path');
 const { chromium } = require('playwright');
 
+function checkBlockLayout(blocks, lots) {
+  const epsilon = 1e-8;
+  const areaSize = (area) => (area.maxX - area.minX) * (area.maxZ - area.minZ);
+  for (const block of blocks) {
+    assert.ok(['building', 'park', 'mixed'].includes(block.kind));
+    const children = lots.filter((lot) => lot.blockId === block.id);
+    const parks = children.filter((lot) => lot.kind === 'park');
+    const buildings = children.filter((lot) => lot.kind === 'building');
+    if (block.kind === 'building') { assert.equal(block.parkArea, null); assert.equal(parks.length, 0); }
+    if (block.kind === 'park') { assert.equal(block.buildingArea, null); assert.equal(buildings.length, 0); }
+    if (block.kind === 'mixed') {
+      assert.ok(Math.abs(areaSize(block.buildingArea) - areaSize(block.parkArea)) < epsilon);
+      assert.ok(block.buildingArea.maxX <= block.parkArea.minX || block.parkArea.maxX <= block.buildingArea.minX
+        || block.buildingArea.maxZ <= block.parkArea.minZ || block.parkArea.maxZ <= block.buildingArea.minZ);
+    }
+    assert.ok(parks.length <= 1, `${block.id}: park fragmented into individual plots`);
+    for (const lot of children) {
+      const area = lot.kind === 'park' ? block.parkArea : block.buildingArea;
+      assert.ok(area, `${block.id}: wrong land use`);
+      assert.ok(lot.x - lot.width / 2 >= area.minX - epsilon && lot.x + lot.width / 2 <= area.maxX + epsilon);
+      assert.ok(lot.z - lot.depth / 2 >= area.minZ - epsilon && lot.z + lot.depth / 2 <= area.maxZ + epsilon);
+      if (lot.kind === 'park') {
+        assert.ok(Math.abs(lot.width * lot.depth - areaSize(area)) < epsilon, `${block.id}: disconnected lawn`);
+      }
+    }
+    for (let a = 0; a < children.length; a++) {
+      for (let b = a + 1; b < children.length; b++) {
+        const first = children[a];
+        const second = children[b];
+        assert.ok(Math.abs(first.x - second.x) >= (first.width + second.width) / 2 - epsilon
+          || Math.abs(first.z - second.z) >= (first.depth + second.depth) / 2 - epsilon,
+        `${block.id}: overlapping park/building footprints`);
+      }
+    }
+  }
+}
+
 test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { timeout: 90000 }, async (t) => {
   const root = path.resolve(__dirname, '..');
   const types = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json' };
@@ -34,25 +71,186 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   assert.match(await page.locator('h1').textContent(), /Oude Baan/);
   const initial = await page.evaluate(() => ({ stats: scene3d.getStats(),
     events: [...activeHolidayEvents].map((event) => event.id),
+    city: scene3d.cityDecorations,
+    blocks: scene3d.environment.blocks,
+    lots: scene3d.environment.lots.map(({ x, z, width, depth, kind, blockId }) => ({ x, z, width, depth, kind, blockId })),
+    localSinterklaas: [...propStates.values()].flat().filter((prop) => prop.spec.model === 'sinterklaas/sinterklaas').length,
     gifts: [...propStates.values()].flat().filter((prop) => prop.spec.model.includes('present')).map((prop) => prop.spec.height) }));
   assert.deepEqual(initial.events, ['sinterklaas']);
   assert.ok(initial.gifts.length && initial.gifts.every((height) => height === 40));
-  assert.ok(initial.stats.calls <= 9);
+  assert.ok(initial.stats.calls <= 10);
   assert.equal(initial.stats.textures, 0);
+  assert.ok(initial.stats.buildings > 10 && initial.stats.parks > 5);
+  assert.ok(initial.city.length >= 40);
+  const sinterklaas = initial.city.filter((prop) => prop.model === 'sinterklaas/sinterklaas');
+  assert.equal(sinterklaas.length, 1);
+  assert.equal(sinterklaas[0].placement, 'roof');
+  assert.ok(sinterklaas[0].y > 3);
+  assert.equal(initial.localSinterklaas, 0);
+  assert.deepEqual([...new Set(initial.city.map((prop) => prop.placement))].sort(), ['park', 'pavement', 'roof']);
+  assert.deepEqual([...new Set(initial.blocks.map((block) => block.kind))].sort(), ['building', 'mixed', 'park']);
+  checkBlockLayout(initial.blocks, initial.lots);
+
+  const checkCity = async () => {
+    await page.waitForFunction(() => scene3d.width === innerWidth && scene3d.height === innerHeight);
+    const city = await page.evaluate(() => {
+      scene3d.begin(currentDarkness);
+      scene3d.render();
+      const gl = scene3d.renderer.getContext();
+      const pixel = new Uint8Array(4);
+      const coverage = [];
+      for (const x of [0, .25, .5, .75, 1]) {
+        for (const y of [0, .25, .5, .75, 1]) {
+          gl.readPixels(Math.floor(x * (gl.drawingBufferWidth - 1)), Math.floor(y * (gl.drawingBufferHeight - 1)),
+            1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+          coverage.push(pixel[3]);
+        }
+      }
+      scene3d.ground(495, 580).y = 0;
+      const center = scene3d.position.project(scene3d.camera);
+      let fingerprint = 2166136261;
+      for (const batch of scene3d.staticBatches.values()) {
+        const values = new Uint32Array(batch.mesh.instanceMatrix.array.buffer, 0, batch.mesh.count * 16);
+        for (const value of values) fingerprint = Math.imul(fingerprint ^ value, 16777619) >>> 0;
+      }
+      const outsideRoads = scene3d.cityDecorations.filter((prop) => prop.placement !== 'roof').every((prop) =>
+        !scene3d.environment.roadsX.some((road) => prop.x + .2 > road.min && prop.x - .2 < road.max)
+        && !scene3d.environment.roadsZ.some((road) => prop.z + .2 > road.min && prop.z - .2 < road.max));
+      return { coverage, fingerprint, outsideRoads, stats: scene3d.getStats(),
+        blocks: scene3d.environment.blocks,
+        lots: scene3d.environment.lots.map(({ x, z, width, depth, kind, blockId }) => ({ x, z, width, depth, kind, blockId })),
+        center: { x: (center.x + 1) * innerWidth / 2, y: (1 - center.y) * innerHeight / 2 },
+        expectedY: innerHeight / 2 + 85 * Math.min(innerWidth, innerHeight) * .4 / 990,
+        sinterklaas: scene3d.cityDecorations.filter((prop) => prop.unique) };
+    });
+    assert.ok(city.coverage.every((alpha) => alpha === 255), `Incomplete ground: ${city.coverage}`);
+    assert.ok(city.outsideRoads);
+    assert.ok(Math.abs(city.center.x - page.viewportSize().width / 2) < .001);
+    assert.ok(Math.abs(city.center.y - city.expectedY) < .001);
+    assert.ok(city.stats.calls <= 13 && city.stats.geometries <= 14);
+    assert.deepEqual(city.sinterklaas, sinterklaas);
+    checkBlockLayout(city.blocks, city.lots);
+    for (const block of city.blocks) {
+      const original = initial.blocks.find((item) => item.id === block.id);
+      if (original) assert.deepEqual(block, original);
+    }
+    return city;
+  };
+  const landscape = await checkCity();
+
+  // Exercise the real date-to-solar-state path as well as the resulting rendered colours.
+  const phases = {};
+  for (const [phase, hour] of [['day', '12:00'], ['dusk', '16:45'], ['evening', '17:30'],
+    ['night', '23:00'], ['dawn', '08:45']]) {
+    phases[phase] = await page.evaluate(({ hour }) => {
+      window.fakeTime = `2026-11-20T${hour}:00+01:00`;
+      updateTimeOfDay();
+      scene3d.begin(currentDarkness, currentLighting);
+      scene3d.drawBus('central', pointsOfInterest.routeA.stop.x, pointsOfInterest.routeA.stop.y, false, 1, Date.now());
+      scene3d.drawBus('route', pointsOfInterest.routeB.stop.x, pointsOfInterest.routeB.stop.y, false, 1, Date.now());
+      scene3d.render();
+      const gl = scene3d.renderer.getContext();
+      const pixels = new Uint8Array(gl.drawingBufferWidth * gl.drawingBufferHeight * 4);
+      gl.readPixels(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      const average = [0, 0, 0];
+      let count = 0;
+      for (let n = 0; n < pixels.length; n += 4 * 251) {
+        for (let c = 0; c < 3; c++) average[c] += pixels[n + c];
+        count++;
+      }
+      return { stats: scene3d.getStats(), average: average.map((value) => value / count) };
+    }, { hour });
+    assert.equal(phases[phase].stats.phase, phase);
+    assert.equal(phases[phase].stats.busLights, 2);
+    assert.ok(phases[phase].stats.streetLights > 20);
+    assert.ok(phases[phase].stats.calls <= 13);
+  }
+  assert.equal(phases.day.stats.nightLights, 0);
+  assert.equal(phases.night.stats.nightLights, 1);
+  assert.ok(phases.night.stats.saturation < phases.evening.stats.saturation);
+  assert.ok(phases.evening.stats.saturation < phases.dusk.stats.saturation);
+  assert.ok(phases.dusk.stats.saturation < phases.day.stats.saturation);
+  assert.ok(phases.day.average.reduce((a, b) => a + b) > phases.night.average.reduce((a, b) => a + b) * 2);
+  assert.ok(phases.dusk.average[0] / phases.dusk.average[2] > phases.dawn.average[0] / phases.dawn.average[2]);
+
+  const lightSamples = await page.evaluate(() => {
+    scene3d.begin(1, { elevationHours: -2, isMorning: false });
+    scene3d.drawBus('central', pointsOfInterest.routeA.stop.x, pointsOfInterest.routeA.stop.y, false, .8, Date.now());
+    scene3d.drawBus('route', pointsOfInterest.routeB.stop.x, pointsOfInterest.routeB.stop.y, false, 1, Date.now());
+    const gl = scene3d.renderer.getContext();
+    const pixel = new Uint8Array(4);
+    const sample = (x, y, z) => {
+      scene3d.projected.set(x, y, z).project(scene3d.camera);
+      gl.readPixels(Math.round((scene3d.projected.x + 1) * (gl.drawingBufferWidth - 1) / 2),
+        Math.round((scene3d.projected.y + 1) * (gl.drawingBufferHeight - 1) / 2),
+        1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+      return [...pixel].slice(0, 3);
+    };
+    const fronts = scene3d.lightingUniforms.uBusFront.value;
+    const directions = scene3d.lightingUniforms.uBusDirection.value;
+    const samples = () => ({
+      headlights: fronts.map((front, n) => sample(front.x, .018, front.z + directions[n].y * 4)),
+      rear: sample(fronts[1].x, .018, fronts[1].z - directions[1].y * 6.52),
+      street: sample(-1.5, .018, -12),
+    });
+    scene3d.render();
+    const on = samples();
+    fronts.forEach((front) => { front.w = 0; });
+    scene3d.render();
+    const noBuses = samples();
+    scene3d.lightingUniforms.uNightLights.value = 0;
+    scene3d.render();
+    const off = samples();
+    return { on, noBuses, off, directions: directions.map((direction) => direction.toArray()) };
+  });
+  const sum = (pixel) => pixel.reduce((a, b) => a + b);
+  assert.deepEqual(lightSamples.directions, [[0, 1], [0, -1]]);
+  for (let n = 0; n < 2; n++) {
+    assert.ok(sum(lightSamples.on.headlights[n]) > sum(lightSamples.noBuses.headlights[n]) + 30,
+      `Headlight ${n} did not illuminate the road: ${JSON.stringify(lightSamples)}`);
+  }
+  assert.ok(lightSamples.on.rear[0] > lightSamples.noBuses.rear[0] + 10, JSON.stringify(lightSamples));
+  assert.ok(lightSamples.on.rear[0] - lightSamples.noBuses.rear[0] > lightSamples.on.rear[2] - lightSamples.noBuses.rear[2]);
+  assert.ok(sum(lightSamples.on.street) > sum(lightSamples.off.street) + 40);
+  const movingLights = await page.evaluate(() => {
+    const stop = pointsOfInterest.routeA.stop;
+    scene3d.begin(1);
+    scene3d.drawBus('central', stop.x, stop.y, false, 1, Date.now());
+    const before = scene3d.lightingUniforms.uBusFront.value[0].toArray();
+    scene3d.begin(1);
+    scene3d.drawBus('central', stop.x - 120, stop.y + 120 / Math.sqrt(3), true, .4, Date.now());
+    const after = scene3d.lightingUniforms.uBusFront.value[0].toArray();
+    scene3d.drawBus('route', pointsOfInterest.routeB.stop.x, pointsOfInterest.routeB.stop.y, false, 1, Date.now());
+    scene3d.drawBus('central', stop.x, stop.y, false, 1, Date.now());
+    const budget = scene3d.busLightCount;
+    scene3d.begin(1);
+    return { before, after, budget, cleared: scene3d.lightingUniforms.uBusFront.value.every((front) => front.w === 0) };
+  });
+  assert.ok(Math.abs(movingLights.before[0] - movingLights.after[0]) < .01);
+  assert.ok(movingLights.after[2] - movingLights.before[2] > 2.9);
+  assert.equal(movingLights.after[3], .4);
+  assert.equal(movingLights.budget, 2);
+  assert.equal(movingLights.cleared, true);
+  await page.evaluate(() => {
+    window.fakeTime = '2026-11-20T12:00:00+01:00';
+    updateTimeOfDay();
+  });
 
   // Render 600 visible, animated people, rather than hiding them offscreen in a long queue.
   const crowd = await page.evaluate(() => {
     const started = performance.now();
-    scene3d.begin(0);
+    scene3d.begin(1);
     for (let i = 0; i < 600; i++) scene3d.drawStudent({ seq: i, flip: i % 2, bounceSpeed: 180, bouncePhase: i },
       140 + i % 30 * 25, 450 + Math.floor(i / 30) * 18, true, 1, [], Date.now());
+    scene3d.drawBus('central', pointsOfInterest.routeA.stop.x, pointsOfInterest.routeA.stop.y, false, 1, Date.now());
+    scene3d.drawBus('route', pointsOfInterest.routeB.stop.x, pointsOfInterest.routeB.stop.y, false, 1, Date.now());
     scene3d.render();
     return { ...scene3d.getStats(), submissionMs: performance.now() - started };
   });
-  assert.ok(crowd.calls <= 9, JSON.stringify(crowd));
-  assert.ok(crowd.geometries <= 9, JSON.stringify(crowd));
+  assert.ok(crowd.calls <= 13, JSON.stringify(crowd));
+  assert.ok(crowd.geometries <= 14, JSON.stringify(crowd));
   assert.ok(crowd.triangles > initial.stats.triangles);
-  t.diagnostic(`600 visible students: ${crowd.calls} draw calls, ${crowd.triangles} triangles, ${crowd.submissionMs.toFixed(1)}ms CPU submission (test machine).`);
+  t.diagnostic(`600 visible students and 2 buses at night: ${crowd.calls} draw calls, ${crowd.triangles} triangles, ${crowd.submissionMs.toFixed(1)}ms CPU submission (test machine).`);
 
   const beforeResize = await page.evaluate(() => {
     studentAnimationData.clear();
@@ -67,8 +265,16 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
   assert.deepEqual(resized.point, beforeResize.point);
   assert.ok(resized.stats.bufferWidth * resized.stats.bufferHeight <= 1920 * 1080);
   assert.ok(resized.effects <= 1920 * 1080);
+  assert.equal((await checkCity()).fingerprint, landscape.fingerprint);
   await page.setViewportSize({ width: 1080, height: 1920 });
   assert.deepEqual(await page.evaluate(() => pointsOfInterest.routeA.stop), beforeResize.point);
+  await checkCity();
+  for (const viewport of [{ width: 3840, height: 1080 }, { width: 360, height: 1200 }]) {
+    await page.setViewportSize(viewport);
+    await checkCity();
+  }
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  assert.equal((await checkCity()).fingerprint, landscape.fingerprint);
 
   for (const [date, event] of [['2026-12-15', 'christmas'], ['2026-10-31', 'halloween'],
     ['2026-04-05', 'easter'], ['2026-02-15', 'carnaval'], ['2026-05-05', 'bevrijdingsdag'],
@@ -81,6 +287,11 @@ test('procedural scenery, holiday transitions, bounded crowds and lifecycle', { 
     }, { date });
     assert.ok(active.includes(event), `${date}: ${active}`);
     await page.waitForTimeout(70);
+    const decorations = await page.evaluate(() => scene3d.cityDecorations);
+    if (['christmas', 'halloween', 'easter', 'bevrijdingsdag'].includes(event)) {
+      assert.ok(decorations.length >= 20, `${event}: missing city decorations`);
+    } else assert.equal(decorations.length, 0);
+    assert.equal(decorations.filter((prop) => prop.model === 'sinterklaas/sinterklaas').length, 0);
   }
   // Exercise floating geometry as well as ground models and vehicles.
   await page.evaluate(() => { scene3d.begin(0); scene3d.drawFloating('balloon', 500, 300, 250); scene3d.render(); });

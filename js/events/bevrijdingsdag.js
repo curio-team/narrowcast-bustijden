@@ -14,6 +14,10 @@ registerHolidayEvent({
     // should show bottom right of screen or something instead of as a ground prop
     // { model: 'bevrijdingsdag/krant', height: 500, count: 1 },
   ],
+  cityProps: [
+    { model: 'bevrijdingsdag/flowers', height: 55, count: 14, placements: ['park', 'pavement'] },
+    { model: 'bevrijdingsdag/flag', height: 95, count: 14 },
+  ],
 
   driveBy: { model: 'bevrijdingsdag/jeep', width: 150, chance: 0.5 },
 });

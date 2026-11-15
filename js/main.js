@@ -234,7 +234,7 @@ import('./scene3d.js').then(({ IsometricScene }) => {
   const notice = document.createElement('p');
   notice.setAttribute('role', 'status');
   notice.style.cssText = 'position:fixed;bottom:0;left:0;font:12px sans-serif;padding:4px;';
-  notice.textContent = '3D-weergave niet beschikbaar. Vertrektijden blijven zichtbaar.';
+  notice.textContent = '3D-weergave niet beschikbaar.';
   document.body.appendChild(notice);
 });
 
@@ -255,12 +255,16 @@ function getNow() {
   return Number.isNaN(date.getTime()) ? new Date() : date;
 }
 
-function getSunElevationHours() {
-  const date = getNow();
+function getSolarHour(date) {
+  return (date.getUTCHours() + date.getUTCMinutes() / 60 + date.getUTCSeconds() / 3600
+    + amsterdamLongitude / 15) % 24;
+}
+
+function getSunElevationHours(date = getNow()) {
   const startOfYear = Date.UTC(date.getUTCFullYear(), 0, 0);
   const dayOfYear = (date.getTime() - startOfYear) / 86400000;
   const halfDayLength = 6.15 + 2.2 * Math.cos(2 * Math.PI * (dayOfYear - 172) / 365); // ~4h (winter) to ~8.3h (summer)
-  const solarHour = (date.getUTCHours() + date.getUTCMinutes() / 60 + amsterdamLongitude / 15) % 24;
+  const solarHour = getSolarHour(date);
   return halfDayLength - Math.abs(solarHour - 12); // hours until sunrise/sunset; negative at night
 }
 
@@ -299,9 +303,12 @@ function getSkyGradient(e) {
 }
 
 let currentDarkness = 0;
+let currentLighting = { elevationHours: 2, isMorning: false };
 let lastSkyGradient = '';
 function updateTimeOfDay() {
-  const e = getSunElevationHours();
+  const date = getNow();
+  const e = getSunElevationHours(date);
+  currentLighting = { elevationHours: e, isMorning: getSolarHour(date) < 12 };
   currentDarkness = Math.min(1, Math.max(0, (0.2 - e) / 0.7)); // headlights fade in around dusk
 
   const gradient = getSkyGradient(e);
@@ -311,9 +318,9 @@ function updateTimeOfDay() {
 
     const d = currentDarkness;
     const root = document.documentElement.style;
-    root.setProperty('--sky-header-bg', `rgba(${mixColor([86, 221, 239], [30, 30, 78], d)}, ${0.5 + 0.25 * d})`);
+    root.setProperty('--sky-header-bg', `rgba(${mixColor([86, 221, 239], [30, 30, 78], d)}, ${0.92 + 0.03 * d})`);
     root.setProperty('--sky-title', `rgb(${mixColor([105, 25, 124], [222, 208, 255], d)})`);
-    root.setProperty('--sky-panel-bg', `rgba(${mixColor([255, 255, 255], [14, 16, 44], d)}, ${0.5 + 0.15 * d})`);
+    root.setProperty('--sky-panel-bg', `rgba(${mixColor([255, 255, 255], [14, 16, 44], d)}, ${0.91 + 0.04 * d})`);
     root.setProperty('--sky-text', `rgb(${mixColor([0, 0, 0], [238, 238, 250], d)})`);
     root.setProperty('--sky-border', `rgb(${mixColor([229, 231, 235], [60, 62, 100], d)})`);
   }
@@ -591,10 +598,10 @@ function getEventScene() {
     get drawArea() { return drawArea; },
     get pointsOfInterest() { return pointsOfInterest; },
     get darkness() { return currentDarkness; }, // 0 = daylight, 1 = night
-    get nightFilter() { return nightFilter; }, // canvas filter that darkens sprites at night
+    get nightFilter() { return nightFilter; }, // day/night filter available to canvas effects
     get busSize() { return busSize; },
     get scale() { return 1; }, // world simulation uses original layout units
-    toCanvas(point) { // background pixels (the 990x990 of background.png) to canvas pixels
+    toCanvas(point) { // the original 990-unit layout to canvas pixels
       return {
         x: drawArea.x + point.x * drawArea.width / backgroundOriginalSize,
         y: drawArea.y + point.y * drawArea.height / backgroundOriginalSize,
@@ -621,7 +628,7 @@ function draw(timestamp) {
     lastTimeOfDayUpdate = now;
   }
   backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
-  scene3d.begin(currentDarkness);
+  scene3d.begin(currentDarkness, currentLighting);
   updateHolidayEvents(eventScene, getNow());
   drawHolidayGround(eventScene, now);
 

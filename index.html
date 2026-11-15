@@ -40,9 +40,9 @@
 
     /* These colors are blended between day and night by updateTimeOfDay() */
     :root {
-      --sky-header-bg: rgba(86, 221, 239, 0.5);
+      --sky-header-bg: rgba(86, 221, 239, 0.92);
       --sky-title: #69197c;
-      --sky-panel-bg: rgba(255, 255, 255, 0.5);
+      --sky-panel-bg: rgba(255, 255, 255, 0.91);
       --sky-text: #000;
       --sky-border: #e5e7eb;
     }
@@ -66,6 +66,10 @@
 
     .sky-title {
       color: var(--sky-title);
+    }
+
+    h1.sky-title {
+      text-shadow: 0 0 12px var(--sky-panel-bg), 0 0 4px var(--sky-panel-bg);
     }
 
     h2 {
@@ -178,7 +182,7 @@
   </div>
 
   <div class="fixed bottom-0 w-full sky-title text-center p-4">
-    <p class="text-xl font-bold">Let op: Alle vertrektijden zijn vanaf de halte.</p>
+    <p class="text-xl font-bold inline-block px-4 py-1 rounded-full sky-panel">Let op: Alle vertrektijden zijn vanaf de halte.</p>
   </div>
 
   <!-- Holiday events: the registry must load before the event files, and all before main.js -->

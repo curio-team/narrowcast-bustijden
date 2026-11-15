@@ -8,6 +8,12 @@ const position = new THREE.Vector3();
 const scale = new THREE.Vector3();
 const euler = new THREE.Euler();
 
+// Shared by the street geometry and vehicle placement so neither can drift toward a kerb.
+export const MAIN_ROAD_LANES = {
+  central: { min: -2, max: 1.1 },
+  route: { min: 2.2, max: 5.5 },
+};
+
 function model(height, build) {
   const parts = [];
   const add = (shape, color, x, y, z, w, h, d, rx = 0, ry = 0, rz = 0, glow = false) => {
@@ -18,7 +24,7 @@ function model(height, build) {
     parts.push({ shape: glow ? `${shape}-glow` : shape, color: colors.get(color),
       matrix: new THREE.Matrix4().compose(position, rotation, scale) });
   };
-  build(add);
+  build(add, parts);
   return { height, parts };
 }
 
@@ -30,22 +36,8 @@ function stop(add, x, z) {
   for (let n = 0; n < 3; n++) add('box', '#987f45', x + .09, 2.7 - n * .15, z, .02, .035, .38);
 }
 
+// The stop itself stays fixed. Viewport-sized ground and city blocks are generated separately.
 export const scenery = model(7, (add) => {
-  add('box', '#637f87', 0, -.22, 0, 16, .45, 11.4);
-  for (const [x, width] of [[-5, 6], [1.65, 1.1], [6.75, 2.5]]) {
-    add('box', '#c6c5ac', x, .02, 0, width, .32, 11.4);
-    const columns = Math.round(width / .8);
-    for (let ix = 0; ix < columns; ix++) {
-      for (let iz = 0; iz < 14; iz++) {
-        const tone = (ix + iz) % 3 === 0 ? '#eee9cf' : '#e2dfc8';
-        add('box', tone, x - width / 2 + (ix + .5) * width / columns, .20,
-          -5.7 + (iz + .5) * 11.4 / 14, width / columns - .035, .05, 11.4 / 14 - .035);
-      }
-    }
-  }
-  for (const x of [-1.94, 1.04, 2.26, 5.43]) {
-    for (let iz = 0; iz < 14; iz++) add('box', '#f5edd1', x, .012, -5.3 + iz * .81, .075, .02, .66);
-  }
   // Tree, planter and the recognisable blue shelter with its orange bench.
   add('box', '#65735d', -6.4, .37, 2.8, 2.25, .35, 2.25);
   add('sphere', '#719650', -6.4, .65, 2.8, 2.2, .7, 2.2);
@@ -77,6 +69,361 @@ export const scenery = model(7, (add) => {
   stop(add, -3.45, -2.55);
   stop(add, 6.9, -2.1);
 });
+
+function lotRandom(column, row) {
+  let state = (Math.imul(column, 73856093) ^ Math.imul(row, 19349663) ^ 0x43ba1d29) >>> 0;
+  return () => {
+    state += 0x6d2b79f5;
+    let value = Math.imul(state ^ state >>> 15, 1 | state);
+    value ^= value + Math.imul(value ^ value >>> 7, 61 | value);
+    return ((value ^ value >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+// Land use belongs to a complete street-bounded block, never to an individual house plot.
+export function getCityBlock(column, row) {
+  const side = Math.sign(column);
+  const index = Math.abs(column) - 1;
+  const near = index === 0 ? side > 0 ? 5.5 : 2 : 33.4 + (index - 1) * 36;
+  const far = 29.6 + index * 36;
+  const bounds = { minX: side > 0 ? near : -far, maxX: side > 0 ? far : -near,
+    minZ: row * 36 - 15.9, maxZ: row * 36 + 15.9 };
+  const random = lotRandom(column * 17, row * 23);
+  const choice = random();
+  const kind = index === 0 && row === 0 ? 'building' : choice < .43 ? 'building' : choice < .70 ? 'park' : 'mixed';
+  const axis = random() < .5 ? 'x' : 'z';
+  const parkSide = random() < .5 ? -1 : 1;
+  const inner = { minX: bounds.minX + 1.8, maxX: bounds.maxX - 1.8,
+    minZ: bounds.minZ + 1.8, maxZ: bounds.maxZ - 1.8 };
+  let buildingArea = kind === 'park' ? null : { ...inner };
+  let parkArea = kind === 'building' ? null : { ...inner };
+  if (kind === 'mixed') {
+    const min = axis === 'x' ? 'minX' : 'minZ';
+    const max = axis === 'x' ? 'maxX' : 'maxZ';
+    const middle = (inner[min] + inner[max]) / 2;
+    if (parkSide < 0) { parkArea[max] = middle - .4; buildingArea[min] = middle + .4; }
+    else { buildingArea[max] = middle - .4; parkArea[min] = middle + .4; }
+  }
+  return { id: `${column}:${row}`, column, row, kind, axis, parkSide, bounds, buildingArea, parkArea };
+}
+
+function visibleCityLot(lot, view, keepFocus = true) {
+  const u = (lot.x - lot.z) / Math.sqrt(2);
+  const v = (lot.x + lot.z) / Math.sqrt(6);
+  const radiusU = (lot.width + lot.depth + 1) / (2 * Math.sqrt(2));
+  const radiusV = (lot.width + lot.depth + 1) / (2 * Math.sqrt(6));
+  const top = v - radiusV - (lot.height + 2) * Math.sqrt(2 / 3);
+  const bottom = v + radiusV;
+  if (keepFocus && u + radiusU > -11 && u - radiusU < 11 && bottom > -10 && top < 7) return false;
+  return u + radiusU >= view.minU && u - radiusU <= view.maxU && bottom >= view.minV && top <= view.maxV;
+}
+
+function blockBuildings(block, view) {
+  if (!block.buildingArea) return [];
+  const area = block.buildingArea;
+  const width = area.maxX - area.minX;
+  const depth = area.maxZ - area.minZ;
+  const columns = Math.max(1, Math.round(width / 6.5));
+  const rows = Math.max(1, Math.round(depth / 8.5));
+  const lots = [];
+  for (let column = 0; column < columns; column++) {
+    for (let row = 0; row < rows; row++) {
+      const random = lotRandom(block.column * 101 + column, block.row * 103 + row);
+      const floors = 2 + Math.floor(random() * 3);
+      const lot = { x: area.minX + (column + .5) * width / columns,
+        z: area.minZ + (row + .5) * depth / rows,
+        width: width / columns - .35, depth: depth / rows - .70,
+        floors, height: floors * 1.95 + .5, kind: 'building', blockId: block.id,
+        blockBounds: block.bounds, random };
+      if (visibleCityLot(lot, view)) lots.push(lot);
+    }
+  }
+  return lots;
+}
+
+function building(add, lot) {
+  const { x, z, width, depth, height, floors, random } = lot;
+  const facade = ['#b9907d', '#c5b6a0', '#a7b7b3', '#be9d92', '#a7abb8', '#b6b49c'][Math.floor(random() * 6)];
+  const roof = ['#71777d', '#866d65', '#727e78'][Math.floor(random() * 3)];
+  const base = .225;
+  add('box', facade, x, base + height / 2, z, width, height, depth);
+  add('box', '#dfd6bf', x, base + height - .12, z, width + .12, .18, depth + .12);
+  const pitched = random() < .55;
+  lot.roof = { base: base + height + (pitched ? .1 : .17), rise: pitched ? width * .22 : 0 };
+  if (pitched) {
+    const rise = width * .22;
+    const slope = Math.atan2(rise, width / 2);
+    const panel = Math.hypot(width / 2, rise) + .25;
+    for (const side of [-1, 1]) add('box', roof, x + side * width / 4,
+      base + height + rise / 2, z, panel, .18, depth + .45, 0, 0, -side * slope);
+  } else {
+    add('box', roof, x, base + height + .08, z, width + .25, .18, depth + .25);
+    add('box', '#a0aaa6', x - width * .2, base + height + .35, z, width * .28, .45, depth * .25);
+  }
+  add('box', roof, x + width * .25, base + height + .65, z - depth * .2, .45, 1.2, .5);
+  const frontColumns = Math.max(2, Math.floor(width / 1.65));
+  const sideColumns = Math.max(2, Math.floor(depth / 1.65));
+  for (let floor = 0; floor < floors; floor++) {
+    const y = base + 1.25 + floor * 1.95;
+    for (let column = 0; column < frontColumns; column++) {
+      const wx = x - width / 2 + (column + .5) * width / frontColumns;
+      const glass = random() < .25 ? '#a9b9b5' : '#647e89';
+      add('box', '#ded7c6', wx, y, z + depth / 2 + .025, .87, 1.12, .055);
+      add('box', glass, wx, y + .035, z + depth / 2 + .06, .68, .88, .025);
+    }
+    for (let column = 0; column < sideColumns; column++) {
+      const wz = z - depth / 2 + (column + .5) * depth / sideColumns;
+      add('box', '#ded7c6', x + width / 2 + .025, y, wz, .055, 1.12, .87);
+      add('box', '#748d96', x + width / 2 + .06, y + .035, wz, .025, .88, .68);
+    }
+  }
+  add('box', '#4e6268', x, .99, z + depth / 2 + .09, .82, 1.75, .08);
+  add('box', '#d5c9b0', x, 1.93, z + depth / 2 + .13, 1.05, .12, .18);
+}
+
+function cityTree(add, x, z, height, random) {
+  const green = ['#789b61', '#8eab68', '#679675', '#99ad69'][Math.floor(random() * 4)];
+  add('sphere', '#7f9769', x + .25, .24, z + .15, height * .65, .02, height * .5);
+  add('cylinder', '#967455', x, .225 + height * .25, z, .19, height * .5, .19);
+  add('sphere', green, x, .225 + height * .67, z, height * .62, height * .64, height * .59);
+  add('sphere', '#a8bc7b', x - height * .09, .225 + height * .87, z + height * .04,
+    height * .40, height * .35, height * .39);
+}
+
+function streetLamp(add, headX, z, postX) {
+  add('cylinder', '#455965', postX, .30, z, .30, .15, .30);
+  add('cylinder', '#526674', postX, 2.525, z, .105, 4.6, .105);
+  add('box', '#526674', (postX + headX) / 2, 4.82, z, Math.abs(headX - postX) + .10, .10, .12);
+  add('box', '#354b5b', headX, 4.79, z, .75, .17, .40);
+  add('box', '#ffe3a2', headX, 4.685, z, .57, .035, .28, 0, 0, 0, true);
+  add('box', '#ffe3a2', headX, 4.75, z + .205, .60, .065, .025, 0, 0, 0, true);
+  add('box', '#ffe3a2', headX + .38, 4.75, z, .025, .065, .30, 0, 0, 0, true);
+  // Camera-facing procedural halo. Its shader fades it out completely during daylight.
+  add('light', '#ffd396', headX + .12, 4.78, z + .24, .95, .95, 1);
+}
+
+function parkBench(add, x, z) {
+  add('box', '#c29263', x, .72, z, 1.5, .12, .5);
+  add('box', '#c29263', x, .99, z - .22, 1.5, .48, .10);
+  for (const side of [-1, 1]) add('box', '#54676b', x + side * .55, .46, z, .09, .48, .42);
+}
+
+function cityPark(add, lot) {
+  const { x, z, random, width, depth } = lot;
+  add('box', '#92ad78', x, .23, z, width, .025, depth);
+  const loopWidth = width - 3;
+  const loopDepth = depth - 3;
+  const crossing = z + depth * .14;
+  // One continuous park with an edge loop, entrances and shared walking paths.
+  for (const side of [-1, 1]) {
+    add('paving', '#e2dfc8', x, .242, z + side * loopDepth / 2, loopWidth + .8, .025, .8);
+    add('paving', '#e2dfc8', x + side * loopWidth / 2, .242, z, .8, .025, loopDepth);
+    parkBench(add, x + side * Math.min(width * .23, 3.5), crossing + side * 1.05);
+  }
+  add('paving', '#e2dfc8', x, .242, z, 1.05, .025, depth);
+  add('paving', '#e2dfc8', x, .242, crossing, width, .025, 1.05);
+  if (random() < .6) {
+    const pond = { x: x + width * .24, z: z - depth * .15,
+      radiusX: Math.min(width * .12, 2.1), radiusZ: Math.min(depth * .13, 2.0) };
+    add('sphere', '#c6c9b2', pond.x, .25, pond.z, pond.radiusX * 2 + .22, .035, pond.radiusZ * 2 + .22);
+    add('sphere', '#7da6a8', pond.x, .27, pond.z, pond.radiusX * 2, .025, pond.radiusZ * 2);
+    lot.pond = pond;
+  }
+  const treesPerSide = Math.max(2, Math.min(5, Math.round(depth / 6)));
+  for (const side of [-1, 1]) {
+    for (let n = 0; n < treesPerSide; n++) {
+      const tx = x + side * (width / 2 - 1.8);
+      const tz = z - depth / 2 + 2.3 + n * (depth - 4.6) / (treesPerSide - 1);
+      cityTree(add, tx, tz, 3 + random() * 1.5, random);
+    }
+    for (let n = 0; n < 6; n++) {
+      const bx = x + side * Math.min(width * .22, 3.2) + (n - 2.5) * .38;
+      const bz = z + side * (depth / 2 - .8);
+      add('sphere', '#6f925f', bx, .42, bz, .47, .36, .48);
+      add('sphere', n % 2 ? '#d3ae69' : '#bd8b9f', bx, .61, bz, .2, .13, .2);
+    }
+  }
+}
+
+function gaps(min, max, roads) {
+  const segments = [];
+  let edge = min;
+  for (const road of [...roads].sort((a, b) => a.min - b.min)) {
+    if (road.max <= edge || road.min >= max) continue;
+    if (road.min > edge) segments.push({ min: edge, max: road.min });
+    edge = Math.max(edge, road.max);
+  }
+  if (edge < max) segments.push({ min: edge, max });
+  return segments;
+}
+
+export function createEnvironment(bounds, view) {
+  const length = bounds.maxZ - bounds.minZ;
+  const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+  let buildingCount = 0;
+  let parkCount = 0;
+  const cityLots = [];
+  const cityBlocks = [];
+  const streetLights = [];
+  const roadsX = Object.values(MAIN_ROAD_LANES);
+  const roadsZ = [];
+  const environment = model(12, (add) => {
+    // One asphalt base, with continuous paving between streets. The city and stop now share
+    // the same .225-high pavement surface, without an artificial edge around the old diorama.
+    add('box', '#637f87', (bounds.minX + bounds.maxX) / 2, -.22, centerZ,
+      bounds.maxX - bounds.minX, .45, length);
+    for (let n = 0; 31.5 + n * 36 < Math.max(-bounds.minX, bounds.maxX) + 4; n++) {
+      for (const side of [-1, 1]) {
+        const x = side * (31.5 + n * 36);
+        roadsX.push({ min: x - 1.9, max: x + 1.9 });
+      }
+    }
+    for (let n = Math.floor(bounds.minZ / 36) - 1; n <= Math.ceil(bounds.maxZ / 36); n++) {
+      const z = 18 + n * 36;
+      if (z + 2.1 > bounds.minZ && z - 2.1 < bounds.maxZ) roadsZ.push({ min: z - 2.1, max: z + 2.1 });
+    }
+    const pavedX = gaps(bounds.minX, bounds.maxX, roadsX);
+    const pavedZ = gaps(bounds.minZ, bounds.maxZ, roadsZ);
+    for (const x of pavedX) {
+      for (const z of pavedZ) add('paving', '#e2dfc8', (x.min + x.max) / 2, .065,
+        (z.min + z.max) / 2, x.max - x.min, .32, z.max - z.min);
+    }
+    // Pale kerbs and zebra crossings connect the extended footpaths at side streets.
+    for (const z of pavedZ) {
+      for (const x of [-1.96, 1.06, 2.24, 5.46]) add('box', '#f3ecd4', x, .229,
+        (z.min + z.max) / 2, .075, .018, z.max - z.min);
+    }
+    for (const street of roadsZ) {
+      const z = (street.min + street.max) / 2;
+      for (let x = Math.ceil(bounds.minX / 3) * 3; x < bounds.maxX; x += 3) {
+        if (roadsX.some((road) => x + .6 > road.min && x - .6 < road.max)) continue;
+        add('box', '#dce0ce', x, .017, z, 1.2, .012, .075);
+      }
+      for (const x of [-3.4, 6.9]) {
+        for (let n = 0; n < 7; n++) add('box', '#eee9d6', x, .018, z - 1.7 + n * .56, 1.8, .015, .27);
+      }
+    }
+    const columns = [{ head: -1.5, post: -2.8 }, { head: 5, post: 6.3 }];
+    for (let n = 0; 30 + n * 36 < Math.max(-bounds.minX, bounds.maxX); n++) {
+      for (const side of [-1, 1]) columns.push({ head: side * (30 + n * 36), post: side * (29.5 + n * 36) });
+    }
+    for (const column of columns) {
+      if (column.post < bounds.minX || column.post > bounds.maxX) continue;
+      for (let row = Math.ceil(bounds.minZ / 12); row <= Math.floor(bounds.maxZ / 12); row++) {
+        const z = row * 12;
+        streetLamp(add, column.head, z, column.post);
+        streetLights.push({ x: column.head, y: 4.68, z });
+      }
+    }
+
+    const blocks = [];
+    const maxColumn = Math.ceil(Math.max(-bounds.minX, bounds.maxX) / 36) + 1;
+    for (let column = -maxColumn; column <= maxColumn; column++) {
+      if (column === 0) continue;
+      for (let row = Math.floor(bounds.minZ / 36); row <= Math.ceil(bounds.maxZ / 36); row++) {
+        const block = getCityBlock(column, row);
+        const houses = blockBuildings(block, view);
+        let park = null;
+        if (block.parkArea) {
+          const area = block.parkArea;
+          park = { x: (area.minX + area.maxX) / 2, z: (area.minZ + area.maxZ) / 2,
+            width: area.maxX - area.minX, depth: area.maxZ - area.minZ, height: 5, kind: 'park',
+            blockId: block.id, blockBounds: block.bounds, random: lotRandom(column * 109, row * 113) };
+          if (!visibleCityLot(park, view, false)) park = null;
+        }
+        if (houses.length || park) blocks.push({ ...block, houses, park });
+      }
+    }
+    blocks.sort((a, b) => Math.hypot((a.bounds.minX + a.bounds.maxX) / 2, a.row * 36)
+      - Math.hypot((b.bounds.minX + b.bounds.maxX) / 2, b.row * 36));
+    for (const block of blocks) {
+      // Keep complete land-use areas together when limiting distant detail on extreme displays.
+      if (buildingCount + block.houses.length > 150 || cityBlocks.length >= 24) continue;
+      for (const lot of block.houses) {
+        building(add, lot);
+        buildingCount++;
+        cityLots.push(lot);
+      }
+      if (block.park) {
+        cityPark(add, block.park);
+        parkCount++;
+        cityLots.push(block.park);
+      }
+      cityBlocks.push({ id: block.id, kind: block.kind, bounds: block.bounds,
+        buildingArea: block.buildingArea, parkArea: block.parkArea });
+    }
+  });
+  return { ...environment, buildingCount, parkCount, blocks: cityBlocks, lots: cityLots, roadsX, roadsZ, streetLights };
+}
+
+function decorationHash(value) {
+  let hash = 2166136261;
+  for (let n = 0; n < value.length; n++) hash = Math.imul(hash ^ value.charCodeAt(n), 16777619);
+  return (hash >>> 0) / 4294967296;
+}
+
+export function createCityDecorations(environment, specs) {
+  const placed = [];
+  const anchors = [];
+  for (const lot of environment.lots) {
+    const key = `${lot.x}:${lot.z}`;
+    if (lot.kind === 'building') {
+      for (const [dx, dz] of [[0, .28], [-.27, -.28], [.27, .28]]) {
+        anchors.push({ id: `${key}:roof:${dx}:${dz}`, placement: 'roof', lot,
+          x: lot.x + dx * lot.width, z: lot.z + dz * lot.depth });
+      }
+    } else {
+      for (const [dx, dz] of [[-.28, -.28], [.28, -.28], [-.28, .28], [.28, .28],
+        [-.08, -.32], [.08, .32], [-.30, 0], [.30, 0]]) {
+        const x = lot.x + dx * lot.width;
+        const z = lot.z + dz * lot.depth;
+        if (lot.pond && Math.hypot((x - lot.pond.x) / (lot.pond.radiusX + .6),
+          (z - lot.pond.z) / (lot.pond.radiusZ + .6)) < 1) continue;
+        anchors.push({ id: `${key}:park:${dx}:${dz}`, placement: 'park', lot,
+          x, z });
+      }
+    }
+    const block = lot.blockBounds;
+    for (const [x, z] of [[block.minX + .75, lot.z], [block.maxX - .75, lot.z],
+      [lot.x, block.minZ + .75], [lot.x, block.maxZ - .75]]) {
+      if (environment.roadsX.some((road) => x + .5 > road.min && x - .5 < road.max)
+        || environment.roadsZ.some((road) => z + .5 > road.min && z - .5 < road.max)) continue;
+      anchors.push({ id: `${key}:pavement:${x}:${z}`, placement: 'pavement', lot, x, z });
+    }
+  }
+  // Unique characters reserve their place before the smaller props are scattered around them.
+  for (const spec of [...specs].sort((a, b) => Number(!!b.unique) - Number(!!a.unique))) {
+    const placements = spec.placements || ['roof', 'park', 'pavement'];
+    const candidates = anchors.filter((anchor) => placements.includes(anchor.placement)).map((anchor) => {
+      const radius = spec.unique ? .2 : spec.height / (55 * Math.sqrt(2 / 3)) * .38;
+      const roof = anchor.lot.roof;
+      const y = anchor.placement === 'roof'
+        ? roof.base + roof.rise * Math.max(0, 1 - Math.max(0, Math.abs(anchor.x - anchor.lot.x) - radius) / (anchor.lot.width / 2))
+        : anchor.placement === 'park' ? .245 : .225;
+      const u = (anchor.x - anchor.z) / Math.sqrt(2);
+      const v = (anchor.x + anchor.z) / Math.sqrt(6) - y * Math.sqrt(2 / 3);
+      // Prefer a roof to the right of the stop for the single Sinterklaas: visible in both orientations.
+      const score = spec.unique ? Math.hypot(u - 17, v + 2) + Math.hypot(anchor.x, anchor.z) * .02
+        : decorationHash(`${spec.model}:${anchor.id}`);
+      return { ...anchor, y, u, v, score };
+    }).filter((anchor) => {
+      const h = spec.height / 55;
+      return !(anchor.u > -12 && anchor.u < 12 && anchor.v > -10 && anchor.v - h < 7);
+    }).sort((a, b) => a.score - b.score);
+    for (let n = 0; n < Math.min(spec.unique ? 1 : spec.count || 1, 80); n++) {
+      const preferred = placements[n % placements.length];
+      const free = (anchor) => placed.every((other) => Math.hypot(anchor.x - other.x,
+        anchor.z - other.z, (anchor.y - other.y) * 2) > (spec.unique || other.unique ? 1.25 : .95));
+      const anchor = spec.unique ? candidates.find(free)
+        : candidates.find((candidate) => candidate.placement === preferred && free(candidate)) || candidates.find(free);
+      if (!anchor) break;
+      placed.push({ model: spec.model, height: spec.height, unique: !!spec.unique,
+        x: anchor.x, y: anchor.y, z: anchor.z, placement: anchor.placement,
+        angle: spec.unique ? Math.PI / 8 : decorationHash(anchor.id) * Math.PI / 2 });
+    }
+  }
+  return placed;
+}
 
 function student(key) {
   const [, outfit = '', poseText = '0', variantText = '0'] = key.split('|');
@@ -141,17 +488,80 @@ function bus(open) {
     for (const x of [-.72, .72]) {
       add('box', '#fff0ba', x, .81, 2.86, .33, .18, .035, 0, 0, 0, true);
       add('box', '#ed6050', x, .78, -2.86, .2, .29, .035, 0, 0, 0, true);
+      add('light', '#ffdf9c', x, .81, 2.91, .82, .82, 1);
+      add('light', '#ff3020', x, .78, -2.91, .56, .56, 1);
     }
+    // The bus faces +Z, so its right-hand boarding side is -X. Rotating the bus for
+    // the return route puts these same doors beside the opposite pavement.
     for (const z of [-1.25, 1.9]) {
-      add('box', '#294557', 1.035, 1.2, z, .035, 1.65, .65);
-      for (const side of [-1, 1]) add('box', '#9fc9c9', 1.06 + (open ? .05 : 0), 1.4,
+      add('box', '#294557', -1.035, 1.2, z, .035, 1.65, .65);
+      for (const side of [-1, 1]) add('box', '#9fc9c9', -1.06 - (open ? .05 : 0), 1.4,
         z + side * (open ? .35 : .17), .035, 1.08, open ? .08 : .27);
     }
   });
 }
 
+function balloon(passengerCount) {
+  return model(3.3, (add, parts) => {
+    for (let n = 0; n < 8; n++) {
+      const angle = n / 8 * Math.PI * 2;
+      add('sphere', ['#b46a9e', '#eee1bd', '#6d9cae', '#dfac62'][n % 4], Math.sin(angle) * .42, 2.2, Math.cos(angle) * .42, 1.4, 2.1, 1.4);
+    }
+    add('cone', '#b38b62', 0, 1.15, 0, .3, .7, .3, Math.PI);
+
+    // An open wicker basket: a recessed floor, four gently flared walls and a rounded rim.
+    add('box', '#725337', 0, .09, 0, .71, .08, .49);
+    for (const side of [-1, 1]) {
+      add('box', '#ae8051', 0, .265, side * .285, .80, .30, .045, side * .14);
+      add('box', '#ae8051', side * .375, .265, 0, .045, .30, .55, 0, 0, -side * .14);
+      for (let row = 0; row < 4; row++) {
+        const y = .16 + row * .067;
+        const width = .71 + row * .027;
+        const depth = .50 + row * .027;
+        const color = row % 2 ? '#caa16b' : '#ddb781';
+        add('box', color, 0, y, side * (depth / 2 + .017), width, .019, .023);
+        add('box', color, side * (width / 2 + .017), y, 0, .023, .019, depth);
+      }
+      for (let n = -2; n <= 2; n++) add('box', '#8e673f', n * .14, .268,
+        side * .311, .012, .28, .013, side * .14);
+      for (let n = -1; n <= 1; n++) add('box', '#8e673f', side * .401, .268,
+        n * .17, .013, .28, .012, 0, 0, -side * .14);
+      add('cylinder', '#e1bb83', 0, .435, side * .315, .055, .84, .055, 0, 0, Math.PI / 2);
+      add('cylinder', '#e1bb83', side * .42, .435, 0, .055, .63, .055, Math.PI / 2);
+    }
+    for (const x of [-.405, .405]) {
+      for (const z of [-.30, .30]) {
+        add('sphere', '#e1bb83', x, .435, z, .075, .065, .075);
+        add('cylinder', '#8c7666', x, .73, z, .022, .61, .022);
+      }
+    }
+    for (const z of [-.30, .30]) add('box', '#5b6263', 0, 1.035, z, .84, .035, .035);
+    for (const x of [-.405, .405]) add('box', '#5b6263', x, 1.035, 0, .035, .035, .63);
+
+    // Reuse the actual student models at basket scale; their lower bodies sit behind the walls.
+    for (let n = 0; n < passengerCount; n++) {
+      const centerX = passengerCount === 1 ? 0 : (n === 0 ? -.19 : .19);
+      const scale = .43;
+      const root = new THREE.Matrix4().makeScale(scale, scale, scale);
+      root.setPosition(centerX - .1 * scale, .13, .015);
+      for (const part of getModel(`student||0|${n * 2}`).parts) {
+        parts.push({ ...part, matrix: new THREE.Matrix4().multiplyMatrices(root, part.matrix) });
+      }
+      const skin = n === 0 ? '#e3b48e' : '#8d5c45';
+      const shirt = n === 0 ? '#28354e' : '#58495f';
+      for (const side of [-1, 1]) {
+        // Hands rest on the rim, rather than hanging down inside the basket.
+        add('sphere', shirt, centerX + side * .125, .465, .17, .075, .09, .28);
+        add('sphere', skin, centerX + side * .125, .465, .32, .072, .065, .075);
+        add('sphere', '#292a32', centerX + side * .044, .13 + 1.37 * scale,
+          .015 + .20 * scale, .019, .023, .015);
+      }
+    }
+  });
+}
+
 function prop(key) {
-  const name = key.split('/').pop().replace('.png', '');
+  const name = key.split('/').pop();
   return model(name === 'flag' ? 2 : name === 'sinterklaas' ? 2.8 : name.includes('bunny') ? 1.5 : 1, (add) => {
     if (name.startsWith('present')) {
       const n = Number(name.slice(-1)) || 1;
@@ -240,14 +650,6 @@ function prop(key) {
         add('cone', '#eac35d', 0, 1.6, -.4, .8, 1.1, .8);
         for (const x of [-.6, .6]) add('sphere', '#d477a3', x, 1.6, -.6, .6, .65, .6);
       }
-    } else if (name === 'balloon') {
-      for (let n = 0; n < 8; n++) {
-        const angle = n / 8 * Math.PI * 2;
-        add('sphere', ['#b46a9e', '#eee1bd', '#6d9cae', '#dfac62'][n % 4], Math.sin(angle) * .42, 2.2, Math.cos(angle) * .42, 1.4, 2.1, 1.4);
-      }
-      add('cone', '#b38b62', 0, 1.15, 0, .3, .7, .3, Math.PI);
-      add('box', '#9e7856', 0, .25, 0, .6, .4, .5);
-      for (const x of [-.23, .23]) add('cylinder', '#8c7666', x, .7, 0, .025, .7, .025);
     } else {
       // Easter eggs, nests and the hatching chick.
       const chick = name.includes('chick');
@@ -267,6 +669,7 @@ function prop(key) {
 
 export function getModel(key) {
   if (!cache.has(key)) cache.set(key, key.startsWith('student|') ? student(key)
+    : key === 'balloon' || key.startsWith('balloon-') ? balloon(key === 'balloon-1' ? 1 : 2)
     : key.startsWith('bus') ? bus(key === 'bus-open') : prop(key));
   return cache.get(key);
 }

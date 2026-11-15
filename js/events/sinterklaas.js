@@ -1,6 +1,6 @@
 /*
 ** Sinterklaas: from the arrival (15 November) up to and including Pakjesavond (5 December). Sinterklaas
-** himself stands at the stop, presents lie around and some students wear a hat.
+** himself stands on one roof, presents are hidden throughout the city and some students wear a hat.
 */
 registerHolidayEvent({
   id: 'sinterklaas',
@@ -21,10 +21,13 @@ registerHolidayEvent({
   ],
 
   props: [
-    { model: 'sinterklaas/sinterklaas', height: 120, at: { x: 140, y: 590 } },
     { model: 'sinterklaas/present1', height: 40, count: [1, 3] },
     { model: 'sinterklaas/present2', height: 40, count: [1, 3] },
     { model: 'sinterklaas/present3', height: 40, count: [1, 3] },
     { model: 'sinterklaas/present4', height: 40, count: [1, 3] },
+  ],
+  cityProps: [
+    { model: 'sinterklaas/sinterklaas', height: 120, count: 1, placements: ['roof'], unique: true },
+    ...[1, 2, 3, 4].map((variant) => ({ model: `sinterklaas/present${variant}`, height: 40, count: 12 })),
   ],
 });

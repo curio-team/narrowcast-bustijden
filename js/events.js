@@ -3,6 +3,8 @@
 ** procedural clothing slots ({ models: ['christmas/student-hat1'], chance: .5 }), ground
 ** props ({ model: 'easter/egg', height: 100, count: [4, 7] }) and drive-by vehicles
 ** ({ model: 'bevrijdingsdag/jeep', width: 150, chance: .5 }).
+** cityProps use { model, height, count, placements: ['roof', 'park', 'pavement'] } and are
+** batched once per holiday/resize. unique: true reserves exactly one roof for a character.
 ** Fixed props use at: { x, y }; scattered props use count. All positions and sizes are in
 ** the original 990-unit layout. Models are defined in models3d.js and share GPU primitives.
 ** draw/drawGround hooks can use scene.ctx for particle effects and scene.models for 3D.
@@ -84,7 +86,7 @@ function getStudentClothing(student) {
 */
 const propStates = new Map(); // event -> placed props, sorted back to front
 
-// Where props may land, as polygons in background pixels: the pavements, minus the tree, shelter and sign.
+// Where props may land, as polygons in the 990-unit layout: pavements minus the tree, shelter and sign.
 // Props in a `front` zone are drawn in front of the busses (like the students of the bottom stop), the
 // rest is drawn under them.
 const propZones = [
@@ -196,7 +198,7 @@ function startHolidayBusCycle() {
   });
 }
 
-// How far ahead of the bus (in background pixels, along the lane) the vehicle starts: half a bus
+// How far ahead of the bus (in layout units, along the lane) the vehicle starts: half a bus
 // (about 340 long) plus half the vehicle plus some room, so it never overlaps the bus
 function getDriveByLead(spec) {
   return spec.lead ?? (340 + spec.width * 0.9) / 2 + 40;
@@ -206,7 +208,7 @@ function drawDriveBy(scene, spec, state, now) {
   const { spawn, stop, destination } = scene.pointsOfInterest.routeA;
   const toStop = Math.hypot(stop.x - spawn.x, stop.y - spawn.y);
   const toDestination = Math.hypot(destination.x - stop.x, destination.y - stop.y);
-  const speed = toStop / BUS_TRAVEL_DURATION; // the bus's speed on its way to the stop, in canvas pixels per ms
+  const speed = toStop / BUS_TRAVEL_DURATION; // the bus's speed on its way to the stop, in layout units per ms
   const lead = getDriveByLead(spec) * scene.scale;
 
   const elapsed = now - state.startTime;
@@ -248,6 +250,7 @@ function updateHolidayEvents(scene, date) {
 
   // Fallback events only run while nothing else does, so a holiday can replace the default scenery
   const anyRegularActive = holidayEvents.some((event) => !event.isFallback && event.isActive(time));
+  let decorationsChanged = false;
 
   holidayEvents.forEach((event) => {
     const active = event.isFallback ? !anyRegularActive : event.isActive(time);
@@ -255,6 +258,7 @@ function updateHolidayEvents(scene, date) {
 
     if (active && !wasActive) {
       activeHolidayEvents.add(event);
+      decorationsChanged = true;
       clothingRevision++;
       if (event.props) {
         propStates.set(event, scatterProps(event.props));
@@ -265,6 +269,7 @@ function updateHolidayEvents(scene, date) {
       event.activate?.(scene, time);
     } else if (!active && wasActive) {
       activeHolidayEvents.delete(event);
+      decorationsChanged = true;
       clothingRevision++;
       propStates.delete(event);
       driveByStates.delete(event);
@@ -275,6 +280,9 @@ function updateHolidayEvents(scene, date) {
       event.tick?.(time, scene);
     }
   });
+  if (decorationsChanged) {
+    scene.models?.setHolidayDecorations([...activeHolidayEvents].flatMap((event) => event.cityProps || []));
+  }
 }
 
 function drawHolidayEvents(scene, now) {

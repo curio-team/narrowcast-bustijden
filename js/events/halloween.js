@@ -13,4 +13,5 @@ registerHolidayEvent({
     { model: 'halloween/pumpkin2', height: 90, count: [2, 3] },
     { model: 'halloween/pumpkin3', height: 90, count: [2, 3] },
   ],
+  cityProps: [1, 2, 3].map((variant) => ({ model: `halloween/pumpkin${variant}`, height: 55, count: 12 })),
 });
