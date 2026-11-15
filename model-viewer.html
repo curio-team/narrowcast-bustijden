@@ -10,7 +10,6 @@
 <body>
   <aside>
     <h1>Model viewer</h1>
-    <p id="reload-status" role="status">Connecting…</p>
     <label>Model <select id="model"></select></label>
     <label>Scene style <select id="style"></select></label>
     <label>Lighting
@@ -54,7 +53,6 @@
     <p id="error" role="alert" hidden></p>
     <p class="hint">Drag to rotate · Scroll to zoom</p>
   </main>
-  <script src="js/model-reload.js"></script>
   <script type="module">
     import('./js/model-viewer.js').catch((error) => {
       const message = document.querySelector('#error');
