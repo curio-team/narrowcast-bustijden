@@ -590,8 +590,143 @@ function balloon(passengerCount) {
   });
 }
 
+function paradeFloat(add) {
+  const red = '#dc3049';
+  const yellow = '#ffd34e';
+  const green = '#21a878';
+  const gold = '#edac32';
+  const cream = '#fff2d5';
+  const ink = '#29263d';
+
+  // A low, skirted wagon carries the sculptures; only the bottoms of its wheels show.
+  add('box', ink, 0, .36, 0, 2.12, .25, 3.7);
+  for (const side of [-1, 1]) {
+    for (const z of [-1.35, 1.35]) {
+      add('cylinder', ink, side * 1.04, .34, z, .68, .22, .68, 0, 0, Math.PI / 2);
+      add('cylinder', gold, side * 1.17, .34, z, .30, .035, .30, 0, 0, Math.PI / 2);
+    }
+  }
+  add('box', green, 0, .78, 0, 2.45, .69, 4.1);
+  add('box', red, 0, 1.08, 0, 2.55, .14, 4.22);
+  add('box', gold, 0, .46, 0, 2.53, .12, 4.18);
+  add('sphere', red, 0, .74, 2.02, 2.64, .64, .55);
+  add('sphere', yellow, 0, 1.04, 2.04, 2.62, .16, .56);
+  for (const side of [-1, 1]) {
+    for (let n = 0; n < 9; n++) {
+      const z = -1.8 + n * .45;
+      add('box', n % 2 ? red : yellow, side * 1.237, .78, z, .035, .27, .27, Math.PI / 4);
+      add('sphere', gold, side * 1.25, .48, z, .13, .20, .32);
+      add('sphere', cream, side * 1.29, 1.1, z, .09, .09, .09, 0, 0, 0, true);
+    }
+    for (let n = 0; n < 5; n++) {
+      add('sphere', cream, -.94 + n * .47, 1.12, side * 2.12, .09, .09, .09, 0, 0, 0, true);
+    }
+  }
+  // Stepped plinth and large curled flourishes give the rear a finished silhouette too.
+  add('box', '#743f9e', 0, 1.25, -.75, 1.8, .30, 1.9);
+  add('box', yellow, 0, 1.43, -.75, 1.65, .10, 1.76);
+  for (const side of [-1, 1]) {
+    for (let n = 0; n < 11; n++) {
+      const a = n / 10 * Math.PI * 1.65;
+      const radius = .52 - n * .025;
+      add('sphere', n < 5 ? red : yellow, side * (1.02 + Math.cos(a) * radius),
+        1.65 + Math.sin(a) * radius, -1.5, .23, .23, .22);
+    }
+    add('box', ink, side * .88, 1.67, -1.68, .42, .7, .40);
+    for (const y of [1.49, 1.81]) {
+      add('cylinder', gold, side * 1.10, y, -1.68, .26, .035, .26, 0, 0, Math.PI / 2);
+      add('cylinder', ink, side * 1.13, y, -1.68, .17, .04, .17, 0, 0, Math.PI / 2);
+    }
+  }
+
+  // Oversized, laughing Carnaval jester, sculpted in the same shared primitives as the city.
+  add('sphere', red, -.31, 2.08, -.87, .9, 1.32, .95, 0, 0, -.12);
+  add('sphere', green, .31, 2.08, -.87, .9, 1.32, .95, 0, 0, .12);
+  for (const y of [1.8, 2.12, 2.44]) add('sphere', yellow, 0, y, -.32, .17, .17, .09);
+  for (const side of [-1, 1]) {
+    add('sphere', side < 0 ? green : red, side * .68, 1.55, -.40, .73, .35, .82, 0, side * .25);
+    add('sphere', yellow, side * .9, 1.65, -.08, .24, .28, .30);
+    const sleeve = side < 0 ? red : green;
+    add('sphere', sleeve, side * .85, 2.46, -.85, .49, .87, .50, 0, 0, side * .7);
+    add('sphere', sleeve, side * 1.19, 2.83, -.77, .40, .74, .42, 0, 0, -side * .35);
+    add('sphere', cream, side * 1.29, 3.12, -.72, .44, .19, .44);
+    add('sphere', '#f4bd91', side * 1.31, 3.34, -.70, .39, .43, .26, 0, 0, side * .12);
+    for (let n = 0; n < 3; n++) {
+      add('sphere', '#f4bd91', side * (1.19 + n * .12), 3.56 - n * .035, -.70, .10, .29, .12,
+        0, 0, -side * (.15 + n * .15));
+    }
+    add('sphere', '#f4bd91', side * 1.08, 3.31, -.60, .17, .25, .17, 0, 0, side * .6);
+  }
+  add('sphere', cream, 0, 2.73, -.83, 1.5, .23, 1.1);
+  for (const x of [-.54, 0, .54]) {
+    add('cone', yellow, x, 2.53, -.27, .40, .46, .17, Math.PI);
+    add('sphere', gold, x, 2.30, -.27, .13, .13, .13);
+  }
+  add('sphere', '#a45a32', 0, 3.62, -.96, 1.76, 1.63, 1.18);
+  add('sphere', '#f4bd91', 0, 3.61, -.78, 1.59, 1.60, 1.12);
+  for (const side of [-1, 1]) {
+    add('sphere', '#f4bd91', side * .82, 3.61, -.80, .30, .43, .30);
+    add('sphere', '#de8b79', side * .85, 3.61, -.63, .13, .25, .08);
+    add('sphere', '#ed8d83', side * .54, 3.49, -.30, .44, .32, .22);
+    add('sphere', cream, side * .32, 3.92, -.29, .43, .51, .20, 0, 0, -side * .12);
+    add('sphere', '#389d9c', side * .30, 3.91, -.18, .22, .29, .08);
+    add('sphere', ink, side * .29, 3.92, -.13, .12, .19, .06);
+    add('sphere', '#ffffff', side * .29 - .035, 3.98, -.09, .055, .065, .025);
+    add('sphere', '#814528', side * .34, 4.18, -.28, .48, .12, .14, 0, 0, side * .16);
+    add('sphere', '#a45a32', side * .67, 4.04, -.65, .27, .52, .37, 0, 0, -side * .25);
+  }
+  add('sphere', red, 0, 3.32, -.25, 1.02, .65, .24);
+  add('sphere', ink, 0, 3.34, -.10, .81, .43, .11);
+  add('sphere', '#f2768c', 0, 3.21, -.025, .48, .14, .09);
+  add('box', cream, 0, 3.47, -.015, .66, .13, .08);
+  add('sphere', '#efa77e', 0, 3.72, -.09, .37, .34, .40);
+  // Three unmistakable floppy hat points, with gold bells rather than a party cone.
+  add('sphere', red, -.35, 4.35, -.85, 1.02, .65, 1.17);
+  add('sphere', green, .35, 4.35, -.85, 1.02, .65, 1.17);
+  add('cylinder', gold, 0, 4.23, -.85, 1.69, .14, 1.22);
+  for (const side of [-1, 1]) {
+    add('cone', side < 0 ? red : green, side * .81, 4.62, -.85, .77, 1.0, .78, 0, 0, -side * .95);
+    add('sphere', yellow, side * 1.23, 4.91, -.85, .26, .26, .26);
+  }
+  add('cone', yellow, 0, 4.77, -.91, .67, .95, .68, -.18);
+  add('sphere', gold, 0, 5.25, -1.0, .24, .24, .24);
+
+  // The front sculpture echoes the huge, toothy papier-mâché cows of Dutch optochten.
+  add('sphere', cream, 0, 2.12, 1.10, 1.83, 1.83, 1.29);
+  for (const side of [-1, 1]) {
+    add('sphere', cream, side * .94, 2.61, 1.11, .67, .37, .38, 0, 0, side * .3);
+    add('sphere', '#ed8d9d', side * 1.01, 2.62, 1.29, .39, .18, .12, 0, 0, side * .3);
+    add('sphere', gold, side * .73, 2.92, 1.02, .25, .57, .25, 0, 0, -side * .48);
+    add('cone', '#ffe2a0', side * .91, 3.16, 1.02, .26, .47, .25, 0, 0, side * .35);
+    add('sphere', ink, side * .73, 2.20, 1.51, .31, .45, .13, 0, 0, side * .4);
+    add('sphere', ink, side * .55, 2.76, 1.54, .38, .25, .11, 0, 0, side * .25);
+    add('sphere', '#ffffff', side * .38, 2.48, 1.66, .58, .70, .24, 0, 0, -side * .12);
+    add('sphere', '#51afd3', side * .36, 2.47, 1.80, .30, .42, .09);
+    add('sphere', ink, side * .35, 2.47, 1.86, .17, .29, .07);
+    add('sphere', '#ffffff', side * .35 - .045, 2.56, 1.90, .075, .10, .025);
+    add('sphere', ink, side * .39, 2.86, 1.67, .60, .12, .15, 0, 0, side * .17);
+  }
+  add('sphere', '#ed718f', 0, 1.56, 1.75, 1.72, 1.05, .57);
+  add('sphere', ink, 0, 1.57, 2.04, 1.45, .78, .17);
+  add('sphere', '#e63d59', 0, 1.27, 2.12, .80, .18, .23);
+  for (let n = 0; n < 6; n++) {
+    const x = (n - 2.5) * .215;
+    add('box', cream, x, 1.76 + Math.abs(x) * .12, 2.14, .195, .26, .13, 0, 0, x * .24);
+  }
+  add('sphere', '#f18ca6', 0, 2.02, 1.88, 1.70, .52, .60);
+  for (const side of [-1, 1]) {
+    add('sphere', '#a93d64', side * .47, 2.09, 2.15, .30, .14, .08, 0, 0, side * .2);
+    add('sphere', '#ffb3bf', side * .25, 2.18, 2.12, .32, .10, .06);
+  }
+  add('sphere', red, 0, 3.02, 1.03, 1.25, .46, 1.0);
+  add('sphere', red, 0, 2.91, 1.30, 1.45, .13, 1.14);
+  add('box', gold, 0, 3.07, 1.50, .29, .31, .08, 0, 0, -.12);
+  add('sphere', green, 0, 3.08, 1.56, .14, .19, .035);
+}
+
 function prop(key) {
   const name = key.split('/').pop();
+  if (name === 'parade-car') return model(5.4, paradeFloat);
   return model(name === 'flag' ? 2 : name === 'sinterklaas' ? 2.8 : name.includes('bunny') ? 1.5 : 1, (add) => {
     if (name.startsWith('present')) {
       const n = Number(name.slice(-1)) || 1;
@@ -670,16 +805,11 @@ function prop(key) {
         add('cylinder', '#69945b', x, .52, z, .035, .65, .035);
         add('sphere', n % 2 ? '#ecc45b' : '#bd6b9b', x, .89, z, .31, .17, .31);
       }
-    } else if (name === 'jeep' || name === 'parade-car') {
-      const parade = name === 'parade-car';
-      add('box', parade ? '#a966b3' : '#6f7c56', 0, .55, 0, 1.2, .5, 2.1);
-      add('box', parade ? '#e1b95b' : '#6f7c56', 0, .97, -.45, 1.12, .45, .7);
+    } else if (name === 'jeep') {
+      add('box', '#6f7c56', 0, .55, 0, 1.2, .5, 2.1);
+      add('box', '#6f7c56', 0, .97, -.45, 1.12, .45, .7);
       add('box', '#b4d6d5', 0, 1.14, .03, 1.06, .5, .06, .15);
       for (const x of [-.62, .62]) for (const z of [-.7, .7]) add('cylinder', '#30343e', x, .3, z, .54, .14, .54, 0, 0, Math.PI / 2);
-      if (parade) {
-        add('cone', '#eac35d', 0, 1.6, -.4, .8, 1.1, .8);
-        for (const x of [-.6, .6]) add('sphere', '#d477a3', x, 1.6, -.6, .6, .65, .6);
-      }
     } else {
       // Easter eggs, nests and the hatching chick.
       const chick = name.includes('chick');

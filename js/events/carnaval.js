@@ -14,5 +14,5 @@ registerHolidayEvent({
     { models: ['carnaval/student-hat1'], chance: 0.5 },
   ],
 
-  driveBy: { model: 'carnaval/parade-car', width: 250, chance: 0.9 },
+  driveBy: { model: 'carnaval/parade-car', width: 400, chance: 0.9 },
 });
