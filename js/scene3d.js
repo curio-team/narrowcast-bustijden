@@ -473,6 +473,20 @@ export class IsometricScene {
     return this.position;
   }
 
+  queueGeometry(direction, x, y) {
+    const sign = direction === 'central' ? 1 : -1;
+    const lane = MAIN_ROAD_LANES[direction];
+    // The roadside pavement is 1.8 units wide. Keep the whole line on its centre,
+    // parallel to the road, with its head beside the bus's front boarding door.
+    const sidewalkX = sign === 1 ? lane.min - .9 : lane.max + .9;
+    const frontZ = this.ground(x + 175, y + 245).z + sign * 2.2;
+    const anchor = {
+      x: 495 + (sidewalkX - frontZ) / SQRT2 * PIXELS_PER_UNIT,
+      y: 580 + (sidewalkX + frontZ) * GROUND_AXIS_Y * PIXELS_PER_UNIT,
+    };
+    return { anchor, dir: { x: -sign * 2 / Math.sqrt(5), y: sign / Math.sqrt(5) } };
+  }
+
   draw(key, x, y, height, angle = 0, alpha = 1, lift = 0) {
     this.ground(x, y).y += lift;
     return this.drawAtPosition(key, height, angle, alpha);
@@ -528,7 +542,7 @@ export class IsometricScene {
   drawStudent(student, x, y, walking, alpha, outfit, now) {
     const phase = walking ? Math.round(Math.sin(now / student.bounceSpeed + student.bouncePhase) * 3) : 0;
     this.draw(`student|${outfit.join(',')}|${phase}|${student.seq % 4}`, x, y, 70,
-      student.flip ? Math.PI : 0, alpha, walking ? Math.abs(phase) * .018 : 0);
+      student.route === 'routeB' ? Math.PI : 0, alpha, walking ? Math.abs(phase) * .018 : 0);
   }
 
   drawFloating(key, x, y, height) {

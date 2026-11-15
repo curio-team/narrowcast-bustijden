@@ -219,7 +219,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-import('./scene3d.js').then(({ IsometricScene, SCENE_STYLES }) => {
+const sceneReady = import('./scene3d.js').then(({ IsometricScene, SCENE_STYLES }) => {
   const params = new URLSearchParams(window.location.search);
   scene3d = new IsometricScene(backgroundCanvasElement, params.get('sceneStyle') || 'original');
   // Inspect bounded draw calls, triangles and GPU resources on a kiosk or in browser devtools.
@@ -361,18 +361,6 @@ function randomBetween(min, max) {
   return min + Math.random() * (max - min);
 }
 
-// Layout offsets stay in the same 990-unit simulation space on every display.
-function scaleOriginalOffset(offset) {
-  return { x: offset.x, y: offset.y };
-}
-
-// Pixel offsets from each stop (same coord space as backgroundOriginalPointsOfInterest):
-// anchorOffset = front of the queue, spawnOffset = where the line starts from.
-const studentTuning = {
-  routeA: { anchorOffset: { x: 50, y: 222 }, spawnOffset: { x: 600, y: -100 }, spacing: 60, perpJitter: 8 },
-  routeB: { anchorOffset: { x: 390, y: 190 }, spawnOffset: { x: -250, y: 600 }, spacing: 60, perpJitter: 8 }
-};
-
 // Console/auto toggle: while true, students pile up faster than busses clear them (see showTestBusses)
 window.crowdedMode = false;
 
@@ -403,26 +391,9 @@ function getWaitingStudentsSorted(routeKey) {
 
 function computeQueueGeometry(routeKey) {
   const stop = pointsOfInterest[routeKey].stop;
-  const tuning = studentTuning[routeKey];
-
-  const anchor = {
-    x: stop.x + scaleOriginalOffset(tuning.anchorOffset).x,
-    y: stop.y + scaleOriginalOffset(tuning.anchorOffset).y
-  };
-  const frontSpawn = {
-    x: stop.x + scaleOriginalOffset(tuning.spawnOffset).x,
-    y: stop.y + scaleOriginalOffset(tuning.spawnOffset).y
-  };
-
-  const lineVec = { x: anchor.x - frontSpawn.x, y: anchor.y - frontSpawn.y };
-  const lineLength = Math.hypot(lineVec.x, lineVec.y) || 1;
-  const dir = { x: lineVec.x / lineLength, y: lineVec.y / lineLength };
-  const perp = { x: -dir.y, y: dir.x };
-
-  const spacing = scaleOriginalOffset({ x: tuning.spacing, y: 0 }).x;
-  const jitterMag = scaleOriginalOffset({ x: tuning.perpJitter, y: 0 }).x;
-
-  return { anchor, frontSpawn, dir, perp, spacing, jitterMag, lineLength };
+  const direction = routeKey === 'routeA' ? busToCentral : busToRoute;
+  const { anchor, dir } = scene3d.queueGeometry(direction, stop.x, stop.y);
+  return { anchor, dir, spacing: 60, lineLength: 600 };
 }
 
 function getStudentPos(student, now) {
@@ -445,8 +416,8 @@ function repositionRoute(routeKey) {
     cumulative += student.gapToPrev;
 
     const target = {
-      x: geo.anchor.x - geo.dir.x * cumulative + geo.perp.x * student.perpOffset,
-      y: geo.anchor.y - geo.dir.y * cumulative + geo.perp.y * student.perpOffset
+      x: geo.anchor.x - geo.dir.x * cumulative,
+      y: geo.anchor.y - geo.dir.y * cumulative
     };
 
     if (target.x === student.moveTo.x && target.y === student.moveTo.y) {
@@ -477,19 +448,16 @@ function spawnStudentsForStop(routeKey, count) {
     const i = startIndex + n;
     const spawnDelay = randomBetween(0, 500);
     const gapToPrev = randomBetween(geo.spacing * 0.45, geo.spacing * 1.0); // tighter, uneven gaps
-    const perpOffset = randomBetween(-geo.jitterMag * 2.5, geo.jitterMag * 2.5); // spread sideways, not a straight line
-
     const roughDistance = geo.lineLength + geo.spacing * i;
     const spawnPos = {
-      x: geo.anchor.x - geo.dir.x * roughDistance + geo.perp.x * perpOffset,
-      y: geo.anchor.y - geo.dir.y * roughDistance + geo.perp.y * perpOffset
+      x: geo.anchor.x - geo.dir.x * roughDistance,
+      y: geo.anchor.y - geo.dir.y * roughDistance
     };
 
     studentAnimationData.set(currentStudentAnimationId, {
       route: routeKey,
       seq: studentSequenceCounter++,
       gapToPrev,
-      perpOffset,
       spawnTime: Date.now() + spawnDelay,
       moveFrom: spawnPos,
       moveTo: spawnPos,
@@ -499,8 +467,7 @@ function spawnStudentsForStop(routeKey, count) {
       boardDuration: null,
       boardPos: null,
       bouncePhase: randomBetween(0, Math.PI * 2),
-      bounceSpeed: randomBetween(160, 220),
-      flip: Math.random() < 0.5
+      bounceSpeed: randomBetween(160, 220)
     });
     currentStudentAnimationId++;
   }
@@ -602,8 +569,9 @@ function showTestBusses() {
   );
 }
 // Wait for the API data (max 5s) so crowdedMode is already decided before the first students spawn
-Promise.race([firstDataLoad, new Promise((resolve) => setTimeout(resolve, 5000))])
+Promise.all([sceneReady, Promise.race([firstDataLoad, new Promise((resolve) => setTimeout(resolve, 5000))])])
   .then(() => {
+    if (!scene3d) return;
     showTestBusses();
     setInterval(showTestBusses, 10000);
   });
