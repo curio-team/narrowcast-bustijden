@@ -11,6 +11,7 @@ const SQRT2 = Math.sqrt(2);
 const MAX_RENDER_PIXELS = 1920 * 1080;
 const LOW_QUALITY_RENDER_PIXELS = 1280 * 720;
 const MAX_INSTANCES = 16384;
+const PORTRAIT_FOCUS_U = -38;
 
 function sameValues(a, b, length) {
   for (let n = 0; n < length; n++) if (a[n] !== b[n]) return false;
@@ -512,7 +513,10 @@ export class IsometricScene {
     const halfH = this.canvasHeight / this.pixelsPerWorldUnit / 2;
     const centerX = this.layoutX + 495 * this.layoutSize / 990;
     const centerY = this.layoutY + 580 * this.layoutSize / 990;
-    const offsetX = (this.canvasWidth / 2 - centerX) / this.pixelsPerWorldUnit;
+    // Portrait screens (a vertical slide) are too narrow for the whole scene: centre them on Curio instead
+    // of the stop. PORTRAIT_FOCUS_U is the horizontal screen position of Curio, in world units.
+    const portraitShift = height > width ? PORTRAIT_FOCUS_U : 0;
+    const offsetX = (this.canvasWidth / 2 - centerX) / this.pixelsPerWorldUnit + portraitShift;
     const offsetY = (centerY - this.canvasHeight / 2) / this.pixelsPerWorldUnit;
     // Move only along the viewing axis on tall displays: framing is unchanged, but the near
     // plane cannot cut through the foreground city when the visible ground becomes deeper.
