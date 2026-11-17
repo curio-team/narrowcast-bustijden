@@ -103,7 +103,7 @@
     id: 'oud-en-nieuw',
 
     isActive(time) {
-      return (time.month === 12 && time.day === 31) || (time.month === 1 && time.day === 1);
+      return (time.month === 12 && time.day >= 31) || (time.month === 1 && time.day <= 7);
     },
 
     activate(scene, time) {
