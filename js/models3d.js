@@ -1,5 +1,9 @@
 import * as THREE from './vendor/three.module.min.js';
 import { COS_ELEVATION, GROUND_AXIS_Y } from './projection3d.js';
+import { buildSite, inSite, CROSSING_Z } from './site3d.js';
+
+// Side streets cross the main road at CROSSING_Z + n * 36: the first one is Oude Baan, just past the stop.
+const STREET_OFFSET = CROSSING_Z;
 
 // Every model is a small list of transformed, shared primitives. No textures or asset downloads.
 const cache = new Map();
@@ -101,7 +105,7 @@ export function getCityBlock(column, row) {
   const near = index === 0 ? side > 0 ? 5.5 : 2 : 33.4 + (index - 1) * 36;
   const far = 29.6 + index * 36;
   const bounds = { minX: side > 0 ? near : -far, maxX: side > 0 ? far : -near,
-    minZ: row * 36 - 15.9, maxZ: row * 36 + 15.9 };
+    minZ: row * 36 + STREET_OFFSET - 33.9, maxZ: row * 36 + STREET_OFFSET - 2.1 };
   const random = lotRandom(column * 17, row * 23);
   const choice = random();
   const kind = index === 0 && row === 0 ? 'building' : choice < .43 ? 'building' : choice < .70 ? 'park' : 'mixed';
@@ -345,27 +349,37 @@ export function createEnvironment(bounds, view) {
       }
     }
     for (let n = Math.floor(bounds.minZ / 36) - 1; n <= Math.ceil(bounds.maxZ / 36); n++) {
-      const z = 18 + n * 36;
+      const z = STREET_OFFSET + n * 36;
+      // Side streets that would run through the hand-made sites on both sides of the main road don't exist,
+      // except the crossing itself
+      if (z !== CROSSING_Z && inSite(-3, z) && inSite(6, z)) continue;
       if (z + 2.1 > bounds.minZ && z - 2.1 < bounds.maxZ) roadsZ.push({ min: z - 2.1, max: z + 2.1 });
     }
     const pavedX = gaps(bounds.minX, bounds.maxX, roadsX);
     const pavedZ = gaps(bounds.minZ, bounds.maxZ, roadsZ);
     for (const x of pavedX) {
-      for (const z of pavedZ) add('paving', '#e2dfc8', (x.min + x.max) / 2, .065,
-        (z.min + z.max) / 2, x.max - x.min, .32, z.max - z.min);
+      for (const z of pavedZ) {
+        // The hand-made site (site3d.js) draws its own ground
+        if (inSite((x.min + x.max) / 2, (z.min + z.max) / 2)) continue;
+        add('paving', '#e2dfc8', (x.min + x.max) / 2, .065,
+          (z.min + z.max) / 2, x.max - x.min, .32, z.max - z.min);
+      }
     }
     // Pale kerbs and zebra crossings connect the extended footpaths at side streets.
     for (const z of pavedZ) {
-      for (const x of [-1.96, 1.06, 2.24, 5.46]) add('box', '#f3ecd4', x, .229,
-        (z.min + z.max) / 2, .075, .018, z.max - z.min);
+      for (const x of [-1.96, 1.06, 2.24, 5.46]) {
+        if (inSite(x - .1, (z.min + z.max) / 2)) continue;
+        add('box', '#f3ecd4', x, .229, (z.min + z.max) / 2, .075, .018, z.max - z.min);
+      }
     }
     for (const street of roadsZ) {
       const z = (street.min + street.max) / 2;
       for (let x = Math.ceil(bounds.minX / 3) * 3; x < bounds.maxX; x += 3) {
-        if (roadsX.some((road) => x + .6 > road.min && x - .6 < road.max)) continue;
+        if (roadsX.some((road) => x + .6 > road.min && x - .6 < road.max) || inSite(x, z)) continue;
         add('box', '#dce0ce', x, .017, z, 1.2, .012, .075);
       }
       for (const x of [-3.4, 6.9]) {
+        if (inSite(x, z)) continue;
         for (let n = 0; n < 7; n++) add('box', '#eee9d6', x, .018, z - 1.7 + n * .56, 1.8, .015, .27);
       }
     }
@@ -377,6 +391,9 @@ export function createEnvironment(bounds, view) {
       if (column.post < bounds.minX || column.post > bounds.maxX) continue;
       for (let row = Math.ceil(bounds.minZ / 12); row <= Math.floor(bounds.maxZ / 12); row++) {
         const z = row * 12;
+        // Inside the hand-made sites only the lamps along the main road remain
+        if (Math.abs(column.post) > 7 && inSite(column.post, z)) continue;
+        if (roadsZ.some((road) => z > road.min - .5 && z < road.max + .5)) continue;
         streetLamp(add, column.head, z, column.post);
         streetLights.push({ x: column.head, y: 4.68, z });
       }
@@ -388,6 +405,7 @@ export function createEnvironment(bounds, view) {
       if (column === 0) continue;
       for (let row = Math.floor(bounds.minZ / 36); row <= Math.ceil(bounds.maxZ / 36); row++) {
         const block = getCityBlock(column, row);
+        if (inSite((block.bounds.minX + block.bounds.maxX) / 2, (block.bounds.minZ + block.bounds.maxZ) / 2)) continue;
         const houses = blockBuildings(block, view);
         let park = null;
         if (block.parkArea) {
@@ -400,6 +418,14 @@ export function createEnvironment(bounds, view) {
         if (houses.length || park) blocks.push({ ...block, houses, park });
       }
     }
+    // The real surroundings of the stop: Curio and the sports field, see site3d.js
+    const site = buildSite(add, { cityTree, lotRandom });
+    for (const lot of site.lots) {
+      cityLots.push(lot);
+      if (lot.kind === 'building') buildingCount++;
+      else parkCount++;
+    }
+    streetLights.push(...site.lights);
     blocks.sort((a, b) => Math.hypot((a.bounds.minX + a.bounds.maxX) / 2, a.row * 36)
       - Math.hypot((b.bounds.minX + b.bounds.maxX) / 2, b.row * 36));
     for (const block of blocks) {

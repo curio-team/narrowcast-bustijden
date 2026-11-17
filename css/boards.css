@@ -240,6 +240,11 @@ p {
   color: #31213f;
 }
 
+.background-only #app,
+.background-only .departure-note {
+  display: none;
+}
+
 .departure-note {
   position: fixed;
   right: 20px;

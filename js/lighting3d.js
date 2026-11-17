@@ -1,3 +1,5 @@
+import { SITES } from './site3d.js';
+
 const DAY = { saturation: 1, brightness: 1, tint: [1, 1, 1], ambient: 2.1, sun: 2.4,
   sunTint: [1, .89, .66], skyTint: [1, .94, .78], groundTint: [.22, .29, .34] };
 const NIGHT = { saturation: .28, brightness: .68, tint: [.58, .72, 1.02], ambient: .7, sun: .12,
@@ -69,9 +71,12 @@ float streetIllumination(vec3 world, vec3 surfaceNormal, float column) {
 vec3 streetLightIllumination(vec3 world, vec3 surfaceNormal) {
   float outerColumn = 30.0 + 36.0 * floor(max(abs(world.x) - 30.0, 0.0) / 36.0 + 0.5);
   outerColumn *= world.x < 0.0 ? -1.0 : 1.0;
+  // The hand-made site (site3d.js) has no lamps on the generated street grid
+  bool inSite = ${SITES.map((site) => `(world.x > ${site.minX.toFixed(1)} && world.x < ${site.maxX.toFixed(1)}
+    && world.z > ${site.minZ.toFixed(1)} && world.z < ${site.maxZ.toFixed(1)})`).join(' || ')};
   float street = streetIllumination(world, surfaceNormal, -1.5)
     + streetIllumination(world, surfaceNormal, 5.0)
-    + streetIllumination(world, surfaceNormal, outerColumn);
+    + (inSite ? 0.0 : streetIllumination(world, surfaceNormal, outerColumn));
   return vec3(1.0, 0.62, 0.28) * street;
 }
 `;

@@ -10,6 +10,11 @@ function isLocalhost() {
     || window.location.hostname === '127.0.0.1';
 }
 
+// ?background=1 hides the departure boards, e.g. to take a screenshot of the scenery
+if (new URLSearchParams(window.location.search).get('background') === '1') {
+  document.body.classList.add('background-only');
+}
+
 let currentBusAnimationId = 0;
 let stopAreaCode = 'BdOud';
 const busAnimationData = new Map();
@@ -95,12 +100,14 @@ Vue.createApp({
           }
           return response.json().then((data) => {
             this.error = null;
+            // routeA is the top board, next to the shelter in the scene; routeB the bottom board, at the
+            // stop across the road
             const routes = {
               routeA: {
-                id: 72000640,
+                id: 72000810,
               },
               routeB: {
-                id: 72000810,
+                id: 72000640,
               }
             };
 
