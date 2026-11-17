@@ -58,8 +58,7 @@ uniform vec2 uBusDirection[2];
 
 // Each fragment considers the two main-road columns and the closest city-street column.
 // This matches the regular lamp positions in models3d.js, so cost is independent of city size.
-const SURFACE_LIGHTS = `
-varying vec3 vSceneWorldPosition;
+const STREET_LIGHTS = `
 float streetIllumination(vec3 world, vec3 surfaceNormal, float column) {
   if (abs(world.x - column) > 8.4 || world.y > 4.67) return 0.0;
   float row = floor(world.z / 12.0 + 0.5) * 12.0;
@@ -67,13 +66,20 @@ float streetIllumination(vec3 world, vec3 surfaceNormal, float column) {
   float falloff = max(0.0, 1.0 - dot(delta, delta) / 70.56);
   return falloff * falloff * max(0.0, dot(surfaceNormal, normalize(delta))) * 1.3;
 }
-vec3 localIllumination(vec3 world, vec3 surfaceNormal) {
+vec3 streetLightIllumination(vec3 world, vec3 surfaceNormal) {
   float outerColumn = 30.0 + 36.0 * floor(max(abs(world.x) - 30.0, 0.0) / 36.0 + 0.5);
   outerColumn *= world.x < 0.0 ? -1.0 : 1.0;
   float street = streetIllumination(world, surfaceNormal, -1.5)
     + streetIllumination(world, surfaceNormal, 5.0)
     + streetIllumination(world, surfaceNormal, outerColumn);
-  vec3 illumination = vec3(1.0, 0.62, 0.28) * street;
+  return vec3(1.0, 0.62, 0.28) * street;
+}
+`;
+
+// Head- and taillights of at most two busses.
+const BUS_LIGHTS = `
+vec3 busIllumination(vec3 world, vec3 surfaceNormal) {
+  vec3 illumination = vec3(0.0);
   for (int i = 0; i < 2; i++) {
     if (uBusFront[i].w <= 0.0) continue;
     vec3 delta = world - uBusFront[i].xyz;
@@ -99,6 +105,18 @@ vec3 localIllumination(vec3 world, vec3 surfaceNormal) {
   return illumination;
 }
 `;
+
+const SURFACE_LIGHTS = `
+varying vec3 vSceneWorldPosition;
+${STREET_LIGHTS}
+${BUS_LIGHTS}
+vec3 localIllumination(vec3 world, vec3 surfaceNormal) {
+  return streetLightIllumination(world, surfaceNormal) + busIllumination(world, surfaceNormal);
+}
+`;
+
+// For the pass that copies the cached static city: busses move, so their light is added per frame.
+export const CACHED_LIGHTS_GLSL = LIGHT_UNIFORMS + STREET_LIGHTS + BUS_LIGHTS;
 
 export function applyLightingShader(shader, uniforms, unlit) {
   Object.assign(shader.uniforms, uniforms);

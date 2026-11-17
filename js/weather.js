@@ -66,7 +66,7 @@ window.setWeatherOverride = setWeatherOverride;
 ** Rendering
 */
 const weatherCanvas = document.createElement('canvas');
-weatherCanvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;';
+weatherCanvas.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:5;visibility:hidden;';
 document.body.appendChild(weatherCanvas);
 const weatherCtx = weatherCanvas.getContext('2d');
 
@@ -213,8 +213,10 @@ function weatherFrame(timestamp) {
   weatherCtx.clearRect(0, 0, weatherCanvas.width, weatherCanvas.height);
 
   if (shownIntensity <= 0 && weather.mode === 'none') {
+    weatherCanvas.style.visibility = 'hidden'; // an empty overlay still costs compositing
     return; // dry: stop looping, startWeatherLoop() wakes it up again
   }
+  weatherCanvas.style.visibility = '';
 
   const push = getWindPush(weather);
   if (shownMode === 'rain') {

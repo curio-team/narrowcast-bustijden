@@ -7,7 +7,8 @@
 ** batched once per holiday/resize. unique: true reserves exactly one roof for a character.
 ** Fixed props use at: { x, y }; scattered props use count. All positions and sizes are in
 ** the original 990-unit layout. Models are defined in models3d.js and share GPU primitives.
-** draw/drawGround hooks can use scene.ctx for particle effects and scene.models for 3D.
+** draw/drawGround hooks can use scene.ctx for particle effects and scene.models for 3D. Only read scene.ctx
+** when actually drawing on it: the 2D canvas is hidden (and not cleared) during frames that don't.
 ** The scene contract is defined in getEventScene() in main.js. Add new event scripts before main.js.
 */
 const holidayEvents = [];
@@ -285,54 +286,50 @@ function updateHolidayEvents(scene, date) {
   }
 }
 
+// Hooks start from a clean 2D canvas state and can't leak theirs. The canvas is only shown while a hook
+// actually uses scene.ctx, so hooks that only draw 3D models cost nothing there.
+function runCanvasHook(scene, filter, hook) {
+  const ctx = scene.canvasContext;
+  ctx.save();
+  ctx.filter = filter;
+  hook();
+  ctx.restore();
+}
+
 function drawHolidayEvents(scene, now) {
   activeHolidayEvents.forEach((event) => {
-    if (!event.draw) {
-      return;
+    if (event.draw) {
+      runCanvasHook(scene, 'none', () => event.draw(scene, now));
     }
-
-    // Events start from a clean canvas state (the scene is drawn with a night filter) and can't leak theirs
-    scene.ctx.save();
-    scene.ctx.filter = 'none';
-    event.draw(scene, now);
-    scene.ctx.restore();
   });
 }
 
-// The ground layer: drawn right after the background, so students and busses walk and drive over it
+// The ground layer: props and drawGround hooks, so students and busses walk and drive over it
 function drawHolidayGround(scene, now) {
   activeHolidayEvents.forEach((event) => {
-    scene.ctx.save();
-    scene.ctx.filter = scene.nightFilter; // it gets the same night as the background
     if (propStates.has(event)) {
       drawProps(scene, propStates.get(event), false);
     }
-    event.drawGround?.(scene, now);
-    scene.ctx.restore();
-  });
-}
-
-// Vehicles are drawn in the same layer as the busses: over the students of the top stop, under those of the bottom stop
-function drawHolidayVehicles(scene, now) {
-  activeHolidayEvents.forEach((event) => {
-    if (driveByStates.get(event)?.startTime) {
-      scene.ctx.save();
-      scene.ctx.filter = scene.nightFilter;
-      drawDriveBy(scene, event.driveBy, driveByStates.get(event), now);
-      scene.ctx.restore();
+    if (event.drawGround) {
+      runCanvasHook(scene, scene.nightFilter, () => event.drawGround(scene, now)); // the same night as the background
     }
   });
 }
 
-// The part of the ground that lies in front of the busses (the bottom stop): drawn after them, under the
-// students who walk there
+// Vehicles drive in the same lane as the busses
+function drawHolidayVehicles(scene, now) {
+  activeHolidayEvents.forEach((event) => {
+    if (driveByStates.get(event)?.startTime) {
+      drawDriveBy(scene, event.driveBy, driveByStates.get(event), now);
+    }
+  });
+}
+
+// Props in front of the busses (the bottom stop)
 function drawHolidayFrontGround(scene) {
   activeHolidayEvents.forEach((event) => {
     if (propStates.has(event)) {
-      scene.ctx.save();
-      scene.ctx.filter = scene.nightFilter;
       drawProps(scene, propStates.get(event), true);
-      scene.ctx.restore();
     }
   });
 }

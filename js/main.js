@@ -221,7 +221,8 @@ resizeCanvas();
 
 const sceneReady = import('./scene3d.js').then(({ IsometricScene, SCENE_STYLES }) => {
   const params = new URLSearchParams(window.location.search);
-  scene3d = new IsometricScene(backgroundCanvasElement, params.get('sceneStyle') || 'original');
+  scene3d = new IsometricScene(backgroundCanvasElement, params.get('sceneStyle') || 'original',
+    { quality: params.get('quality'), opaque: true });
   // Inspect bounded draw calls, triangles and GPU resources on a kiosk or in browser devtools.
   window.scene3d = scene3d;
   if (params.get('compareStyles') === '1') {
@@ -576,11 +577,19 @@ Promise.all([sceneReady, Promise.race([firstDataLoad, new Promise((resolve) => s
     setInterval(showTestBusses, 10000);
   });
 
+// Most events only draw 3D models. The 2D event canvas is only cleared and shown while an event uses scene.ctx.
+let eventCanvasUsed = false;
+let eventCanvasHasContent = true;
+
 // What holiday events (js/events/*.js) get to work with. Live getters, since drawArea etc. are replaced on resize.
 function getEventScene() {
   return {
     canvas: backgroundCanvasElement,
-    ctx: backgroundCanvas,
+    get ctx() {
+      eventCanvasUsed = true;
+      return backgroundCanvas;
+    },
+    get canvasContext() { return backgroundCanvas; }, // for events.js to reset state, without showing the canvas
     get models() { return scene3d; },
     get width() { return window.innerWidth; },
     get height() { return window.innerHeight; },
@@ -616,7 +625,8 @@ function draw(timestamp) {
     updateTimeOfDay();
     lastTimeOfDayUpdate = now;
   }
-  backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  if (eventCanvasHasContent) backgroundCanvas.clearRect(0, 0, window.innerWidth, window.innerHeight);
+  eventCanvasUsed = false;
   scene3d.begin(currentDarkness, currentLighting);
   updateHolidayEvents(eventScene, getNow());
   drawHolidayGround(eventScene, now);
@@ -658,6 +668,10 @@ function draw(timestamp) {
   drawHolidayFrontGround(eventScene);
   drawHolidayEvents(eventScene, now);
   scene3d.render();
+  if (eventCanvasUsed !== eventCanvasHasContent) {
+    eventCanvasHasContent = eventCanvasUsed;
+    eventCanvasElement.style.visibility = eventCanvasUsed ? '' : 'hidden';
+  }
 }
 
 function startSceneLoop() {

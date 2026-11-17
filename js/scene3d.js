@@ -1,6 +1,6 @@
 import * as THREE from './vendor/three.module.min.js';
 import { scenery, createEnvironment, createCityDecorations, getModel, MAIN_ROAD_LANES } from './models3d.js';
-import { getLightingProfile, applyLightingShader } from './lighting3d.js';
+import { getLightingProfile, applyLightingShader, CACHED_LIGHTS_GLSL } from './lighting3d.js';
 import { PixelArtEffect, SCENE_STYLES } from './pixelart3d.js';
 import { SIN_ELEVATION, COS_ELEVATION, GROUND_AXIS_Y } from './projection3d.js';
 
@@ -9,7 +9,20 @@ export { SCENE_STYLES };
 const PIXELS_PER_UNIT = 55;
 const SQRT2 = Math.sqrt(2);
 const MAX_RENDER_PIXELS = 1920 * 1080;
+const LOW_QUALITY_RENDER_PIXELS = 1280 * 720;
 const MAX_INSTANCES = 16384;
+
+function sameValues(a, b, length) {
+  for (let n = 0; n < length; n++) if (a[n] !== b[n]) return false;
+  return true;
+}
+
+function createLights() {
+  const ambient = new THREE.HemisphereLight('#fff8df', '#80919e', 2.1);
+  const sun = new THREE.DirectionalLight('#fff2d4', 2.4);
+  sun.position.set(-15, 28, 10);
+  return [ambient, sun];
+}
 
 // Four primitive types, plus unlit geometry for lamps: draw calls stay constant as crowds grow.
 class Batch {
@@ -37,6 +50,10 @@ class Batch {
     this.mesh.frustumCulled = false;
     this.mesh.count = 0;
     this.scene.add(this.mesh);
+    this.attributes = [[this.mesh.instanceMatrix, 16], [this.mesh.instanceColor, 3], [this.alpha, 1], [this.minPixelWidth, 2]];
+    // Dynamic batches remember their last upload, so frames where nothing moved can be skipped.
+    this.uploaded = this.dynamic ? this.attributes.map(([attribute]) => new Float32Array(attribute.array.length)) : null;
+    this.uploadedCount = -1;
   }
 
   add(matrix, color, alpha, minPixelWidth = 0, box = false) {
@@ -64,14 +81,20 @@ class Batch {
     this.mesh.count++;
   }
 
+  // Uploads the instances. Returns false when they are identical to the previous upload.
   commit() {
-    this.mesh.visible = this.mesh.count > 0;
-    for (const [attribute, size] of [[this.mesh.instanceMatrix, 16], [this.mesh.instanceColor, 3],
-      [this.alpha, 1], [this.minPixelWidth, 2]]) {
+    const count = this.mesh.count;
+    this.mesh.visible = count > 0;
+    if (this.uploaded && count === this.uploadedCount && this.attributes.every(([attribute, size], n) =>
+      sameValues(attribute.array, this.uploaded[n], count * size))) return false;
+    this.attributes.forEach(([attribute, size], n) => {
       attribute.clearUpdateRanges();
-      attribute.addUpdateRange(0, this.mesh.count * size);
+      attribute.addUpdateRange(0, count * size);
       attribute.needsUpdate = true;
-    }
+      this.uploaded?.[n].set(attribute.array.subarray(0, count * size));
+    });
+    this.uploadedCount = count;
+    return true;
   }
 
   dispose() {
@@ -182,19 +205,108 @@ function haloMaterial(uniforms) {
   });
 }
 
+// Copies the cached static city into the frame, depth included, so moving models stay occluded.
+// Busses move, so the light of their headlights on the cached surfaces is added here per frame.
+function cachedSceneMaterial(uniforms) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      ...uniforms,
+      tColor: { value: null },
+      tDepth: { value: null },
+      uResolution: { value: new THREE.Vector2(1, 1) },
+      uInverseViewProjection: { value: new THREE.Matrix4() },
+      uHemiSky: { value: new THREE.Vector3() },
+      uHemiGround: { value: new THREE.Vector3() },
+      uSunColor: { value: new THREE.Vector3() },
+      uSunDirection: { value: new THREE.Vector3(0, 1, 0) },
+    },
+    depthTest: true, depthWrite: true, depthFunc: THREE.AlwaysDepth, blending: THREE.NoBlending,
+    vertexShader: 'void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: `
+      uniform sampler2D tColor;
+      uniform highp sampler2D tDepth;
+      uniform vec2 uResolution;
+      uniform mat4 uInverseViewProjection;
+      uniform vec3 uHemiSky;
+      uniform vec3 uHemiGround;
+      uniform vec3 uSunColor;
+      uniform vec3 uSunDirection;
+      ${CACHED_LIGHTS_GLSL}
+
+      mat3 diagonal(vec3 v) { return mat3(v.x, 0.0, 0.0, 0.0, v.y, 0.0, 0.0, 0.0, v.z); }
+
+      vec3 worldAt(ivec2 pixel, float depth) {
+        vec4 world = uInverseViewProjection * vec4((vec2(pixel) + 0.5) / uResolution * 2.0 - 1.0, depth * 2.0 - 1.0, 1.0);
+        return world.xyz / world.w;
+      }
+
+      vec3 neighbourAt(ivec2 pixel) {
+        pixel = clamp(pixel, ivec2(0), ivec2(uResolution) - 1);
+        return worldAt(pixel, texelFetch(tDepth, pixel, 0).r);
+      }
+
+      // Per axis, the neighbour on the same surface (the smaller step) gives the slope, so pixels next to an
+      // edge don't get the normal of whatever lies behind it.
+      vec3 surfaceNormal(ivec2 pixel, vec3 center) {
+        vec3 left = center - neighbourAt(pixel - ivec2(1, 0));
+        vec3 right = neighbourAt(pixel + ivec2(1, 0)) - center;
+        vec3 down = center - neighbourAt(pixel - ivec2(0, 1));
+        vec3 up = neighbourAt(pixel + ivec2(0, 1)) - center;
+        return normalize(cross(dot(left, left) < dot(right, right) ? left : right,
+          dot(down, down) < dot(up, up) ? down : up));
+      }
+
+      void main() {
+        ivec2 pixel = ivec2(gl_FragCoord.xy);
+        vec4 color = texelFetch(tColor, pixel, 0);
+        float depth = texelFetch(tDepth, pixel, 0).r;
+        gl_FragDepth = depth;
+        if (uNightLights > 0.001 && max(uBusFront[0].w, uBusFront[1].w) > 0.0 && depth < 1.0) {
+          vec3 position = worldAt(pixel, depth);
+          // The beam shape doesn't depend on the normal, only its strength does: most pixels stop here.
+          if (dot(busIllumination(position, vec3(0.0, 1.0, 0.0)), vec3(1.0)) > 0.0) {
+            vec3 normal = surfaceNormal(pixel, position);
+            vec3 beam = busIllumination(position, normal) * uNightLights;
+            // The Lambert light, night grade and street lamps are all linear in the surface colour,
+            // so recover that colour and add the beam exactly like the scene shader does.
+            vec3 irradiance = (mix(uHemiGround, uHemiSky, 0.5 * normal.y + 0.5)
+              + uSunColor * max(dot(normal, uSunDirection), 0.0)) * 0.3183098862; // Lambert's 1 / PI
+            vec3 weights = vec3(0.2126, 0.7152, 0.0722);
+            mat3 grade = mat3(uSceneSaturation)
+              + (1.0 - uSceneSaturation) * mat3(vec3(weights.x), vec3(weights.y), vec3(weights.z));
+            mat3 response = diagonal(uSceneTint * uSceneBrightness) * grade * diagonal(irradiance)
+              + diagonal(streetLightIllumination(position, normal) * uNightLights);
+            color.rgb += clamp(inverse(response) * color.rgb, 0.0, 1.0) * beam;
+          }
+        }
+        gl_FragColor = color;
+        #include <colorspace_fragment>
+      }
+    `,
+  });
+}
+
 export class IsometricScene {
-  constructor(canvas, style = 'original') {
-    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: 'low-power' });
+  // options.quality = 'low' renders fewer pixels without antialiasing, for the weakest displays.
+  // options.opaque: the scene covers the whole canvas, so the browser doesn't have to blend it with the page.
+  constructor(canvas, style = 'original', options = {}) {
+    this.antialias = options.quality !== 'low';
+    this.maxRenderPixels = options.quality === 'low' ? LOW_QUALITY_RENDER_PIXELS : MAX_RENDER_PIXELS;
+    this.renderer = new THREE.WebGLRenderer({ canvas, alpha: !options.opaque, antialias: this.antialias,
+      powerPreference: 'low-power' });
     // Count scene and postprocessing draws together.
     this.renderer.info.autoReset = false;
     this.renderer.setClearColor(0, 0);
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    // The city, street and stop never move: they are drawn once into staticTarget, and each frame only
+    // copies that and draws the moving models over it. See render().
     this.scene = new THREE.Scene();
+    this.staticScene = new THREE.Scene();
     this.camera = new THREE.OrthographicCamera(-20, 20, 20, -20, .1, 300);
-    this.ambient = new THREE.HemisphereLight('#fff8df', '#80919e', 2.1);
-    this.sun = new THREE.DirectionalLight('#fff2d4', 2.4);
-    this.sun.position.set(-15, 28, 10);
+    [this.ambient, this.sun] = createLights();
     this.scene.add(this.ambient, this.sun);
+    this.staticLights = createLights();
+    this.staticScene.add(...this.staticLights);
     this.lightingUniforms = {
       uSceneSaturation: { value: 1 }, uSceneBrightness: { value: 1 },
       uSceneTint: { value: new THREE.Vector3(1, 1, 1) }, uNightLights: { value: 0 },
@@ -207,6 +319,21 @@ export class IsometricScene {
     this.glowMaterial = fadingMaterial(this.lightingUniforms, true);
     this.pavingMaterial = fadingMaterial(this.lightingUniforms, false, true);
     this.haloMaterial = haloMaterial(this.lightingUniforms);
+    this.cacheMaterial = cachedSceneMaterial(this.lightingUniforms);
+    this.cacheMaterial.uniforms.uSunDirection.value.copy(this.sun.position).normalize();
+    // One oversized triangle covers the screen. It is drawn before every other model.
+    this.cacheGeometry = new THREE.BufferGeometry();
+    this.cacheGeometry.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 3, -1, 0, -1, 3, 0], 3));
+    const cachedScene = new THREE.Mesh(this.cacheGeometry, this.cacheMaterial);
+    cachedScene.frustumCulled = false;
+    cachedScene.renderOrder = -1;
+    this.scene.add(cachedScene);
+    this.cacheSize = this.cacheMaterial.uniforms.uResolution.value;
+    this.cameraSnapshot = new Float64Array(32).fill(NaN);
+    this.staticDirty = true;
+    this.forceRender = true;
+    this.staticRenders = 0;
+    this.skippedFrames = 0;
     this.geometries = {
       box: new THREE.BoxGeometry(1, 1, 1),
       paving: new THREE.BoxGeometry(1, 1, 1),
@@ -231,15 +358,35 @@ export class IsometricScene {
     this.pixelPartPoint = new THREE.Vector3();
     this.contextLost = false;
     this.onLost = (event) => { event.preventDefault(); this.contextLost = true; };
-    this.onRestored = () => { this.contextLost = false; };
+    this.onRestored = () => {
+      this.contextLost = false;
+      this.staticDirty = true;
+      this.forceRender = true;
+    };
     canvas.addEventListener('webglcontextlost', this.onLost);
     canvas.addEventListener('webglcontextrestored', this.onRestored);
     this.style = 'original';
     this.pixelEffect = null;
+    this.createStaticTarget();
     this.setStyle(style);
     this.resize(window.innerWidth, window.innerHeight);
     this.lastElevation = null;
     this.busLightCount = 0;
+  }
+
+  createStaticTarget() {
+    this.staticTarget?.depthTexture?.dispose();
+    this.staticTarget?.dispose();
+    // sRGB storage keeps 8-bit precision in the dark night colours. Pixel styles have their own low resolution target.
+    this.staticTarget = new THREE.WebGLRenderTarget(this.cacheSize.x, this.cacheSize.y, {
+      samples: this.pixelEffect || !this.antialias ? 0 : 4,
+      colorSpace: THREE.SRGBColorSpace,
+      minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, generateMipmaps: false,
+      depthTexture: new THREE.DepthTexture(this.cacheSize.x, this.cacheSize.y),
+    });
+    this.cacheMaterial.uniforms.tColor.value = this.staticTarget.texture;
+    this.cacheMaterial.uniforms.tDepth.value = this.staticTarget.depthTexture;
+    this.staticDirty = true;
   }
 
   setStyle(style) {
@@ -249,6 +396,7 @@ export class IsometricScene {
     this.pixelEffect = style === 'original' ? null : new PixelArtEffect(style);
     this.style = style;
     this.renderer.domElement.style.imageRendering = this.pixelEffect ? 'pixelated' : 'auto';
+    this.createStaticTarget();
     if (this.width) this.resize(this.width, this.height);
   }
 
@@ -260,7 +408,9 @@ export class IsometricScene {
         const shape = part.shape.replace('-glow', '');
         const material = shape === 'light' ? this.haloMaterial : shape === 'paving' ? this.pavingMaterial
           : glow ? this.glowMaterial : this.material;
-        batch = new Batch(this.scene, this.geometries[shape], material,
+        // Additive halos are not cached: moving models would hide the glow in front of them.
+        const scene = batches === this.batches || shape === 'light' ? this.scene : this.staticScene;
+        batch = new Batch(scene, this.geometries[shape], material,
           batches === this.batches ? 256 : 512, batches === this.batches);
         batches.set(part.shape, batch);
       }
@@ -324,9 +474,9 @@ export class IsometricScene {
     this.height = height;
     if (this.pixelEffect) {
       const pixelSize = SCENE_STYLES[this.style].pixelSize;
-      this.pixelScale = Math.max(pixelSize, Math.ceil(Math.sqrt(width * height / MAX_RENDER_PIXELS) * pixelSize));
+      this.pixelScale = Math.max(pixelSize, Math.ceil(Math.sqrt(width * height / this.maxRenderPixels) * pixelSize));
       // Cover the viewport with whole pixel blocks, including at odd window dimensions.
-      const maxPixels = MAX_RENDER_PIXELS / pixelSize ** 2;
+      const maxPixels = this.maxRenderPixels / pixelSize ** 2;
       while (Math.ceil(width / this.pixelScale) * Math.ceil(height / this.pixelScale) > maxPixels) this.pixelScale++;
       this.renderer.setPixelRatio(1);
       const renderWidth = Math.max(1, Math.ceil(width / this.pixelScale));
@@ -340,11 +490,17 @@ export class IsometricScene {
       this.canvasWidth = width;
       this.canvasHeight = height;
       this.pixelScale = 1;
-      const ratio = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(MAX_RENDER_PIXELS / (width * height)));
+      const ratio = Math.min(window.devicePixelRatio || 1, 1.5, Math.sqrt(this.maxRenderPixels / (width * height)));
       this.renderer.setPixelRatio(ratio);
       this.renderer.setSize(width, height, false);
       this.lightingUniforms.uPixelViewport.value.set(0, 0);
     }
+    // The cache matches the buffer that each frame is drawn into, pixel for pixel.
+    if (this.pixelEffect) this.cacheSize.set(this.pixelEffect.target.width, this.pixelEffect.target.height);
+    else this.renderer.getDrawingBufferSize(this.cacheSize);
+    this.staticTarget.setSize(this.cacheSize.x, this.cacheSize.y);
+    this.staticDirty = true;
+    this.forceRender = true;
     this.renderer.domElement.style.width = `${this.canvasWidth}px`;
     this.renderer.domElement.style.height = `${this.canvasHeight}px`;
     // Keep the original 990-unit layout so queues, routes and seasonal anchors share coordinates.
@@ -440,29 +596,43 @@ export class IsometricScene {
       this.submit(model, this.root, 1, this.staticBatches);
     }
     this.staticBatches.forEach((batch) => batch.commit());
+    this.staticDirty = true;
   }
 
   begin(darkness, solar = null) {
     this.batches.forEach((batch) => { batch.mesh.count = 0; });
     this.busLightCount = 0;
     this.lightingUniforms.uBusFront.value.forEach((front) => { front.w = 0; });
-    const elevation = solar?.elevationHours ?? 2 - darkness * 4;
+    // Daylight changes slowly. Steps of 0.01 hours (36 seconds) mean the cached city is only
+    // redrawn now and then around sunrise and sunset, and never during the day or night.
+    const elevation = Math.round((solar?.elevationHours ?? 2 - darkness * 4) * 100) / 100;
     const morning = solar?.isMorning ?? false;
-    if (this.lastElevation === null || Math.abs(this.lastElevation - elevation) > .0001 || this.lastMorning !== morning) {
-      const profile = getLightingProfile(elevation, morning);
-      this.lighting = profile;
-      this.lightingUniforms.uSceneSaturation.value = profile.saturation;
-      this.lightingUniforms.uSceneBrightness.value = profile.brightness;
-      this.lightingUniforms.uSceneTint.value.fromArray(profile.tint);
-      this.lightingUniforms.uNightLights.value = profile.lights;
-      this.ambient.intensity = profile.ambient;
-      this.ambient.color.setRGB(...profile.skyTint);
-      this.ambient.groundColor.setRGB(...profile.groundTint);
-      this.sun.intensity = profile.sun;
-      this.sun.color.setRGB(...profile.sunTint);
-      this.lastElevation = elevation;
-      this.lastMorning = morning;
+    if (this.lastElevation === elevation && this.lastMorning === morning) return;
+    this.lastElevation = elevation;
+    this.lastMorning = morning;
+    const profile = getLightingProfile(elevation, morning);
+    const key = JSON.stringify(profile);
+    if (key === this.lightingKey) return;
+    this.lightingKey = key;
+    this.lightingChanged = true;
+    this.lighting = profile;
+    this.lightingUniforms.uSceneSaturation.value = profile.saturation;
+    this.lightingUniforms.uSceneBrightness.value = profile.brightness;
+    this.lightingUniforms.uSceneTint.value.fromArray(profile.tint);
+    this.lightingUniforms.uNightLights.value = profile.lights;
+    for (const [ambient, sun] of [[this.ambient, this.sun], this.staticLights]) {
+      ambient.intensity = profile.ambient;
+      ambient.color.setRGB(...profile.skyTint);
+      ambient.groundColor.setRGB(...profile.groundTint);
+      sun.intensity = profile.sun;
+      sun.color.setRGB(...profile.sunTint);
     }
+    // Light uniforms as three.js passes them to its Lambert shader.
+    const { uHemiSky, uHemiGround, uSunColor } = this.cacheMaterial.uniforms;
+    const { color, groundColor, intensity } = this.ambient;
+    uHemiSky.value.set(color.r, color.g, color.b).multiplyScalar(intensity);
+    uHemiGround.value.set(groundColor.r, groundColor.g, groundColor.b).multiplyScalar(intensity);
+    uSunColor.value.set(this.sun.color.r, this.sun.color.g, this.sun.color.b).multiplyScalar(this.sun.intensity);
   }
 
   // Convert projected layout ground coordinates back into the XZ plane.
@@ -541,7 +711,13 @@ export class IsometricScene {
 
   drawStudent(student, x, y, walking, alpha, outfit, now) {
     const phase = walking ? Math.round(Math.sin(now / student.bounceSpeed + student.bouncePhase) * 3) : 0;
-    this.draw(`student|${outfit.join(',')}|${phase}|${student.seq % 4}`, x, y, 70,
+    // Keys are kept until the outfit changes, rather than building strings for every student each frame.
+    if (student.modelOutfit !== outfit) {
+      student.modelOutfit = outfit;
+      student.modelKeys = [];
+    }
+    const key = student.modelKeys[phase + 3] ??= `student|${outfit.join(',')}|${phase}|${student.seq % 4}`;
+    this.draw(key, x, y, 70,
       student.route === 'routeB' ? Math.PI : 0, alpha, walking ? Math.abs(phase) * .018 : 0);
   }
 
@@ -557,22 +733,68 @@ export class IsometricScene {
     this.submit(model, this.root);
   }
 
+  cameraMoved() {
+    let moved = false;
+    [this.camera.projectionMatrix.elements, this.camera.matrixWorld.elements].forEach((elements, m) => {
+      for (let n = 0; n < 16; n++) {
+        if (this.cameraSnapshot[m * 16 + n] !== elements[n]) {
+          this.cameraSnapshot[m * 16 + n] = elements[n];
+          moved = true;
+        }
+      }
+    });
+    return moved;
+  }
+
+  renderStaticCache() {
+    // The cache must not contain light from busses: they are drawn per frame.
+    const fronts = this.lightingUniforms.uBusFront.value;
+    const busAlpha = fronts.map((front) => front.w);
+    fronts.forEach((front) => { front.w = 0; });
+    const target = this.renderer.getRenderTarget();
+    this.renderer.setRenderTarget(this.staticTarget);
+    this.renderer.render(this.staticScene, this.camera);
+    this.renderer.setRenderTarget(target);
+    fronts.forEach((front, n) => { front.w = busAlpha[n]; });
+    this.staticDirty = false;
+    this.staticRenders++;
+  }
+
+  // Returns false when the frame was skipped because nothing changed since the last one.
   render() {
-    if (this.contextLost) return;
-    this.batches.forEach((batch) => batch.commit());
+    if (this.contextLost) return false;
+    let changed = this.forceRender;
+    this.batches.forEach((batch) => { if (batch.commit()) changed = true; });
     for (const batches of [this.staticBatches, this.batches]) {
       const halo = batches.get('light');
       if (halo) halo.mesh.visible = halo.mesh.count > 0 && this.lightingUniforms.uNightLights.value > .001;
     }
+    if (this.cameraMoved()) {
+      this.cacheMaterial.uniforms.uInverseViewProjection.value
+        .multiplyMatrices(this.camera.matrixWorld, this.camera.projectionMatrixInverse);
+      this.staticDirty = true;
+    }
+    if (this.lightingChanged) {
+      this.lightingChanged = false;
+      this.staticDirty = true;
+    }
+    if (!changed && !this.staticDirty) {
+      this.skippedFrames++;
+      return false;
+    }
+    this.forceRender = false;
     this.renderer.info.reset();
+    if (this.staticDirty) this.renderStaticCache();
     if (this.pixelEffect) this.pixelEffect.render(this.renderer, this.scene, this.camera);
     else this.renderer.render(this.scene, this.camera);
+    return true;
   }
 
   getStats() {
     return { ...this.renderer.info.render, geometries: this.renderer.info.memory.geometries,
       textures: this.renderer.info.memory.textures, pixelRatio: this.renderer.getPixelRatio(),
       style: this.style, pixelScale: this.pixelScale, postPasses: this.pixelEffect ? 1 : 0,
+      antialias: this.antialias, staticRenders: this.staticRenders, skippedFrames: this.skippedFrames,
       buildings: this.buildingCount,
       blocks: this.environment.blocks.length,
       parks: this.parkCount,
@@ -584,6 +806,10 @@ export class IsometricScene {
 
   dispose() {
     this.pixelEffect?.dispose();
+    this.staticTarget.depthTexture?.dispose();
+    this.staticTarget.dispose();
+    this.cacheMaterial.dispose();
+    this.cacheGeometry.dispose();
     this.staticBatches.forEach((batch) => batch.dispose());
     this.batches.forEach((batch) => batch.dispose());
     Object.values(this.geometries).forEach((geometry) => geometry.dispose());

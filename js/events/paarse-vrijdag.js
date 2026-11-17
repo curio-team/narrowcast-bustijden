@@ -40,6 +40,9 @@
   }
 
   function drawPieces(scene, now, dt) {
+    if (!pieces.length) {
+      return; // leaves the canvas untouched, so it can stay hidden
+    }
     const ctx = scene.ctx;
 
     pieces = pieces.filter((piece) => {

@@ -83,6 +83,9 @@
   }
 
   function drawSparks(scene) {
+    if (!sparks.length) {
+      return; // leaves the canvas untouched, so it can stay hidden
+    }
     const ctx = scene.ctx;
     const radius = Math.max(1.5, scene.height * 0.0025);
 
