@@ -9,11 +9,15 @@ registerHolidayEvent({
   },
 
   props: [
-    { image: 'assets/bevrijdingsdag/flowers.png', height: 100, count: [3, 5] },
-    { image: 'assets/bevrijdingsdag/flag.png', height: 200, count: [3, 5] },
+    { model: 'bevrijdingsdag/flowers', height: 100, count: [3, 5] },
+    { model: 'bevrijdingsdag/flag', height: 200, count: [3, 5] },
     // should show bottom right of screen or something instead of as a ground prop
-    // { image: 'assets/bevrijdingsdag/krant.png', height: 500, count: 1 },
+    // { model: 'bevrijdingsdag/krant', height: 500, count: 1 },
+  ],
+  cityProps: [
+    { model: 'bevrijdingsdag/flowers', height: 55, count: 14, placements: ['park', 'pavement'] },
+    { model: 'bevrijdingsdag/flag', height: 95, count: 14 },
   ],
 
-  driveBy: { image: 'assets/bevrijdingsdag/jeep.png', width: 150, chance: 0.5 },
+  driveBy: { model: 'bevrijdingsdag/jeep', width: 150, chance: 0.5 },
 });

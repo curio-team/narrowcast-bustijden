@@ -1,38 +1,14 @@
 /*
-** Holiday events
-**
-** Each event lives in its own file in js/events/ and registers itself here:
-**
-**   registerHolidayEvent({
-**     id: 'my-event',
-**     isActive(time) { return time.month === 2 && time.day === 14; },
-**     isFallback: true,           // optional: no isActive needed, runs only while no non-fallback event is active
-**     activate(scene) { },        // optional: the event just became active (create DOM, reset state)
-**     deactivate(scene) { },      // optional: the event just ended (clean up whatever activate() made)
-**     tick(time, scene) { },      // optional: about once a second while active
-**     draw(scene, now) { },       // optional: every frame while active, on top of the finished scene
-**     drawGround(scene, now) { }, // optional: every frame, on the ground: over the background, under students and busses
-**     clothing: [                 // optional: overlays students may wear while active, one list per slot
-**       { images: ['assets/x/student-hat1.png', 'assets/x/student-hat2.png'], chance: 0.5 },
-**     ],
-**     props: [                    // optional: decoration scattered over the pavement, re-scattered on every activation
-**       { image: 'assets/x/egg.png', height: 26, count: [4, 7] },              // count: a number or [min, max]
-**       { image: 'assets/x/santa.png', height: 95, at: { x: 140, y: 590 } },   // at: fixed spot (feet, background pixels)
-**                                                                              // (add front: true to draw it over the busses)
-**     ],
-**     driveBy: {                  // optional: a vehicle on the route A lane, just ahead of the bus, that doesn't stop
-**       image: 'assets/x/jeep.png', width: 150, chance: 0.5,                   // width in background pixels
-**     },
-**   });
-**
-** Clothing images are 100x240 and get centered on the student (which is 43x103), so draw the item where
-** it belongs on the whole figure. Each student wears at most one image per slot, picked once when the
-** event first sees them, and only with the given chance (0-1).
-**
-** `time` is the current date in Amsterdam (see getAmsterdamTime), `scene` is described in getEventScene()
-** in main.js. Positions for props are in "background pixels": the 990x990 space of assets/background.png
-** (a student is 70 high, a bus 350). Add the new file to index.html, before main.js. New hooks (e.g. for the sky or the students)
-** can be added by calling them from updateHolidayEvents/drawHolidayEvents below.
+** Holiday registry. Events register date predicates, optional activate/deactivate/tick hooks,
+** procedural clothing slots ({ models: ['christmas/student-hat1'], chance: .5 }), ground
+** props ({ model: 'easter/egg', height: 100, count: [4, 7] }) and drive-by vehicles
+** ({ model: 'bevrijdingsdag/jeep', width: 150, chance: .5 }).
+** cityProps use { model, height, count, placements: ['roof', 'park', 'pavement'] } and are
+** batched once per holiday/resize. unique: true reserves exactly one roof for a character.
+** Fixed props use at: { x, y }; scattered props use count. All positions and sizes are in
+** the original 990-unit layout. Models are defined in models3d.js and share GPU primitives.
+** draw/drawGround hooks can use scene.ctx for particle effects and scene.models for 3D.
+** The scene contract is defined in getEventScene() in main.js. Add new event scripts before main.js.
 */
 const holidayEvents = [];
 const activeHolidayEvents = new Set();
@@ -83,38 +59,25 @@ function getEasterSunday(year) {
   return Date.UTC(year, month - 1, day);
 }
 
-const clothingImages = {};
+let clothingRevision = 0;
 
-function getClothingImage(src) {
-  if (!clothingImages[src]) {
-    clothingImages[src] = new Image();
-    clothingImages[src].src = src;
-  }
-  return clothingImages[src];
-}
-
-// The loaded clothing images a student wears right now, from all active events
+// Pick each outfit once and reuse it until the active holiday changes.
 function getStudentClothing(student) {
+  if (student.clothingRevision === clothingRevision) return student.clothing;
   const worn = [];
-
   activeHolidayEvents.forEach((event) => {
     event.clothing?.forEach((slot, slotIndex) => {
       student.outfit ??= {};
       const key = `${event.id}:${slotIndex}`;
-
       if (!(key in student.outfit)) {
         student.outfit[key] = Math.random() < (slot.chance ?? 1)
-          ? slot.images[Math.floor(Math.random() * slot.images.length)]
-          : null;
+          ? slot.models[Math.floor(Math.random() * slot.models.length)] : null;
       }
-
-      const image = student.outfit[key] && getClothingImage(student.outfit[key]);
-      if (image?.complete && image.naturalWidth) {
-        worn.push(image);
-      }
+      if (student.outfit[key]) worn.push(student.outfit[key]);
     });
   });
-
+  student.clothingRevision = clothingRevision;
+  student.clothing = worn;
   return worn;
 }
 
@@ -123,7 +86,7 @@ function getStudentClothing(student) {
 */
 const propStates = new Map(); // event -> placed props, sorted back to front
 
-// Where props may land, as polygons in background pixels: the pavements, minus the tree, shelter and sign.
+// Where props may land, as polygons in the 990-unit layout: pavements minus the tree, shelter and sign.
 // Props in a `front` zone are drawn in front of the busses (like the students of the bottom stop), the
 // rest is drawn under them.
 const propZones = [
@@ -216,19 +179,7 @@ function scatterProps(specs) {
 
 function drawProps(scene, placed, front) {
   placed.forEach((prop) => {
-    if (prop.front !== front) {
-      return;
-    }
-
-    const image = getClothingImage(prop.spec.image);
-    if (!image.complete || !image.naturalWidth) {
-      return;
-    }
-
-    const height = prop.spec.height * scene.scale;
-    const width = height * image.naturalWidth / image.naturalHeight;
-    const position = scene.toCanvas(prop);
-    scene.ctx.drawImage(image, position.x - width / 2, position.y - height, width, height); // x/y are the feet
+    if (prop.front === front) scene.models.draw(prop.spec.model, prop.x, prop.y, prop.spec.height);
   });
 }
 
@@ -247,18 +198,17 @@ function startHolidayBusCycle() {
   });
 }
 
-// How far ahead of the bus (in background pixels, along the lane) the vehicle starts: half a bus
+// How far ahead of the bus (in layout units, along the lane) the vehicle starts: half a bus
 // (about 340 long) plus half the vehicle plus some room, so it never overlaps the bus
 function getDriveByLead(spec) {
   return spec.lead ?? (340 + spec.width * 0.9) / 2 + 40;
 }
 
 function drawDriveBy(scene, spec, state, now) {
-  const image = getClothingImage(spec.image);
   const { spawn, stop, destination } = scene.pointsOfInterest.routeA;
   const toStop = Math.hypot(stop.x - spawn.x, stop.y - spawn.y);
   const toDestination = Math.hypot(destination.x - stop.x, destination.y - stop.y);
-  const speed = toStop / BUS_TRAVEL_DURATION; // the bus's speed on its way to the stop, in canvas pixels per ms
+  const speed = toStop / BUS_TRAVEL_DURATION; // the bus's speed on its way to the stop, in layout units per ms
   const lead = getDriveByLead(spec) * scene.scale;
 
   const elapsed = now - state.startTime;
@@ -267,9 +217,6 @@ function drawDriveBy(scene, spec, state, now) {
 
   if (distance >= totalDistance) {
     state.startTime = 0;
-    return;
-  }
-  if (!image.complete || !image.naturalWidth) {
     return;
   }
 
@@ -281,12 +228,12 @@ function drawDriveBy(scene, spec, state, now) {
   const x = from.x + (to.x - from.x) * progress + scene.busSize.width / 2;
   const y = from.y + (to.y - from.y) * progress + scene.busSize.height / 2;
   const width = spec.width * scene.scale;
-  const height = width * image.naturalHeight / image.naturalWidth;
+  const height = width * .65;
 
   // Fade in and out like the busses do
   const remaining = (totalDistance - distance) / speed;
-  scene.ctx.globalAlpha = Math.max(0, Math.min(1, elapsed / FADE_TIME, remaining / FADE_TIME));
-  scene.ctx.drawImage(image, x - width / 2, y - height / 2, width, height);
+  const alpha = Math.max(0, Math.min(1, elapsed / FADE_TIME, remaining / FADE_TIME));
+  scene.models.draw(spec.model, x, y + 70, height, 0, alpha, -.23);
 }
 
 let lastHolidayEventSecond = null;
@@ -303,6 +250,7 @@ function updateHolidayEvents(scene, date) {
 
   // Fallback events only run while nothing else does, so a holiday can replace the default scenery
   const anyRegularActive = holidayEvents.some((event) => !event.isFallback && event.isActive(time));
+  let decorationsChanged = false;
 
   holidayEvents.forEach((event) => {
     const active = event.isFallback ? !anyRegularActive : event.isActive(time);
@@ -310,6 +258,8 @@ function updateHolidayEvents(scene, date) {
 
     if (active && !wasActive) {
       activeHolidayEvents.add(event);
+      decorationsChanged = true;
+      clothingRevision++;
       if (event.props) {
         propStates.set(event, scatterProps(event.props));
       }
@@ -319,6 +269,8 @@ function updateHolidayEvents(scene, date) {
       event.activate?.(scene, time);
     } else if (!active && wasActive) {
       activeHolidayEvents.delete(event);
+      decorationsChanged = true;
+      clothingRevision++;
       propStates.delete(event);
       driveByStates.delete(event);
       event.deactivate?.(scene);
@@ -328,6 +280,9 @@ function updateHolidayEvents(scene, date) {
       event.tick?.(time, scene);
     }
   });
+  if (decorationsChanged) {
+    scene.models?.setHolidayDecorations([...activeHolidayEvents].flatMap((event) => event.cityProps || []));
+  }
 }
 
 function drawHolidayEvents(scene, now) {

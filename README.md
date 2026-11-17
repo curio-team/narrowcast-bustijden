@@ -1,35 +1,35 @@
 # Narrowcast Bustijden
 
-![Narrowcast Bustijden](./assets/readme-logo.png)
+![Narrowcast Bustijden](./assets/preview.png)
 
-Bus tijden voor de bushaltes in de buurt van onze school. Gemaakt voor de narrowcast schermen in de school.
-
-## API
-
-De API waar we gebruik van maken is de [`ovapi`](http://v0.ovapi.nl/stopareacode/BdOud). We maken gebruik van [een proxy server](http://bustijden.curio.codes/) (zie `proxy.php`) om deze HTTP-API naar HTTPS om te zetten en om onze eigen `CORS` headers toe te voegen.
+Actuele bustijden voor haltes bij onze school, bedoeld voor de narrowcastschermen.
 
 ## Gebruik
 
-1. Clone de repository
+1. Clone of download de repository.
+2. Host de bestanden met een webserver, bijvoorbeeld Live Server in Visual Studio Code. Een buildstap is niet nodig.
+3. Open de site in je browser.
 
-2. Om te zorgen dat de test-data kan laden, moet je het project hosten op localhost. Gebruik bijvoorbeeld de [Live Server](https://marketplace.visualstudio.com/items?itemName=ritwickdey.LiveServer) extensie in Visual Studio Code.
+Op localhost wordt voorbeelddata voor `BdOud` gebruikt. Op een gehoste site worden actuele tijden via de [OVapi-proxy](https://bustijden.curio.codes/) opgehaald. Voor actuele tijden is een internetverbinding nodig.
 
-3. Open de site in je browser
+## Andere haltes
 
-Zie het commentaar in de `index.html` voor meer informatie.
+Standaard toont de site haltegebied `BdOud`. Kies een ander haltegebied via de URL:
 
-## Andere routes
-
-Standaard wordt de route `BdOud` gebruikt. Je kunt dit aanpassen door de `stopAreaCode` in de URL aan te passen:
-
-```
+```text
 ?stopAreaCode=BdLov
 ```
 
-Als je de ook de volgorde van haltes (welke boven of onder staat) wilt aanpassen kun je `routeA` en `routeB` aangeven:
+Met `routeA` en `routeB` bepaal je de volgorde van de twee haltes:
 
-```
+```text
 ?stopAreaCode=BdLov&routeA=72001080&routeB=72001330
 ```
 
-Gebruik de [ovapi](http://v0.ovapi.nl/stopareacode) om alle bushaltes in de buurt van jouw locatie te vinden. Vervolgens staan de `routeA` en `routeB` codes onder de root stopAreaCode node.
+De haltegebied- en haltecodes vind je bij [OVapi](http://v0.ovapi.nl/stopareacode).
+
+## Weergave
+
+Voeg `?compareStyles=1` toe aan de URL om een scènestijl te kiezen. Je kunt ook direct `?sceneStyle=original`, `?sceneStyle=clean`, `?sceneStyle=dither` of `?sceneStyle=ink` gebruiken. Combineer opties met `&`.
+
+Voor de 3D-achtergrond is WebGL 2 nodig. Zonder WebGL 2 blijven de vertrektijden beschikbaar.

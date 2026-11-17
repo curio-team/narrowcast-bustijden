@@ -10,14 +10,15 @@ registerHolidayEvent({
   },
 
   clothing: [
-    { images: ['assets/christmas/student-sweater1.png'], chance: 0.4 },
-    { images: ['assets/christmas/student-hat1.png'], chance: 0.4 },
+    { models: ['christmas/student-sweater1'], chance: 0.4 },
+    { models: ['christmas/student-hat1'], chance: 0.4 },
   ],
 
   props: [
-    { image: 'assets/sinterklaas/present1.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present2.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present3.png', height: 100, count: [1, 3] },
-    { image: 'assets/sinterklaas/present4.png', height: 100, count: [1, 3] },
+    { model: 'sinterklaas/present1', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present2', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present3', height: 40, count: [1, 3] },
+    { model: 'sinterklaas/present4', height: 40, count: [1, 3] },
   ],
+  cityProps: [1, 2, 3, 4].map((variant) => ({ model: `sinterklaas/present${variant}`, height: 40, count: 12 })),
 });
